@@ -1,0 +1,295 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Global styles for Gravity game
+ * Purpose: Base styling and custom utility classes
+ */
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Headings use Orbitron for sci-fi feel */
+  h1, h2, h3, h4, h5, h6,
+  .font-display {
+    font-family: 'Orbitron', monospace;
+  }
+
+  body {
+    @apply bg-gravity-bg text-gravity-text;
+    @apply min-h-screen;
+    @apply antialiased;
+  }
+
+  /* Remove default focus outlines, add custom */
+  *:focus {
+    @apply outline-none;
+  }
+
+  *:focus-visible {
+    @apply ring-2 ring-gravity-accent ring-offset-2 ring-offset-gravity-bg;
+  }
+}
+
+@layer components {
+  /* Panel component - glassmorphism elevated surface */
+  .panel {
+    @apply bg-gravity-surface/80 border border-gravity-border rounded-lg;
+    @apply shadow-lg shadow-black/30;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Button variants */
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-all duration-200;
+    @apply focus-visible:ring-2 focus-visible:ring-gravity-accent;
+    @apply relative overflow-hidden;
+  }
+
+  .btn-primary {
+    @apply btn text-white border border-blue-500/50;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-primary:active {
+    background: linear-gradient(135deg, #1e40af, #1d4ed8);
+  }
+
+  .btn-secondary {
+    @apply btn border border-gravity-border;
+    background: linear-gradient(135deg, rgba(30,41,59,0.9), rgba(51,65,85,0.6));
+  }
+  .btn-secondary:hover {
+    background: linear-gradient(135deg, rgba(51,65,85,0.9), rgba(71,85,105,0.6));
+    border-color: rgba(148,163,184,0.5);
+  }
+
+  .btn-danger {
+    @apply btn text-white border border-red-500/50;
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+  }
+  .btn-danger:hover {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  }
+
+  /* Section card styles */
+  .section-card {
+    @apply p-3 relative rounded-lg;
+    @apply border-2;
+    background: linear-gradient(145deg, rgba(30,41,59,0.85), rgba(15,23,42,0.95));
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .section-card-med-lab {
+    @apply section-card border-section-med-lab/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(250,204,21,0.08);
+  }
+
+  .section-card-bridge {
+    @apply section-card border-section-bridge/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(59,130,246,0.08);
+  }
+
+  .section-card-sci-lab {
+    @apply section-card border-section-sci-lab/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(34,197,94,0.08);
+  }
+
+  .section-card-drive {
+    @apply section-card border-section-drive/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(96,165,250,0.08);
+  }
+
+  .section-card-engineering {
+    @apply section-card border-section-engineering/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(249,115,22,0.08);
+  }
+
+  .section-card-defense {
+    @apply section-card border-section-defense/60;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 8px rgba(239,68,68,0.08);
+  }
+
+  /* Power slot styles */
+  .power-slot {
+    @apply w-10 h-10 rounded-full border-2 border-gravity-border/60;
+    @apply flex items-center justify-center;
+    @apply transition-all duration-300;
+  }
+
+  .power-slot-empty {
+    @apply power-slot;
+    background: radial-gradient(circle, rgba(15,23,42,0.8), rgba(30,41,59,0.4));
+  }
+
+  .power-slot-powered {
+    @apply power-slot border-blue-400;
+    background: radial-gradient(circle, rgba(59,130,246,0.4), rgba(59,130,246,0.15));
+    box-shadow: 0 0 12px rgba(59,130,246,0.5), 0 0 4px rgba(59,130,246,0.8) inset;
+    @apply animate-pulse-slow;
+  }
+
+  /* Hull indicator */
+  .hull-box {
+    @apply w-6 h-6 rounded-sm border border-gravity-border/40;
+    @apply transition-all duration-300;
+  }
+
+  .hull-box-full {
+    @apply hull-box;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    box-shadow: 0 0 6px rgba(34,197,94,0.4);
+  }
+
+  .hull-box-damaged {
+    @apply hull-box;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 0 6px rgba(239,68,68,0.4);
+  }
+
+  .hull-box-empty {
+    @apply hull-box;
+    background: linear-gradient(135deg, rgba(15,23,42,0.6), rgba(30,41,59,0.3));
+  }
+
+  /* Crew token */
+  .crew-token {
+    @apply w-11 h-11 rounded-full;
+    @apply flex items-center justify-center;
+    @apply text-[11px] font-semibold text-white tracking-[0.11em] leading-none;
+    @apply cursor-pointer transition-all duration-200;
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      0 0 0 2px rgba(0,0,0,0.3);
+  }
+  .crew-token:hover {
+    transform: scale(1.1);
+    box-shadow:
+      0 4px 16px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      0 0 12px currentColor;
+  }
+
+  /* Resource icon base */
+  .resource-icon {
+    @apply w-8 h-8 flex items-center justify-center;
+    @apply font-bold text-sm;
+  }
+
+  /* Tracker styles (shields, speed) */
+  .tracker {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .tracker-cell {
+    @apply w-8 h-5 border border-gravity-border/50 text-xs rounded-sm;
+    @apply flex items-center justify-center;
+    @apply transition-all duration-300;
+  }
+
+  .tracker-cell-active {
+    @apply tracker-cell text-white font-bold;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    box-shadow: 0 0 8px rgba(59,130,246,0.4);
+  }
+
+  .tracker-cell-inactive {
+    @apply tracker-cell text-gravity-muted;
+    background: linear-gradient(135deg, rgba(15,23,42,0.6), rgba(30,41,59,0.3));
+  }
+
+  /* Conduit and corridor indicators for ship sections */
+  .conduit-track {
+    @apply flex justify-center gap-1 mb-1;
+  }
+
+  .conduit-dot {
+    @apply w-1.5 h-1.5 rounded-full;
+    background: radial-gradient(circle, #93c5fd, #3b82f6);
+    box-shadow: 0 0 6px rgba(96, 165, 250, 0.9), 0 0 2px rgba(96, 165, 250, 1);
+  }
+
+  .corridor-track {
+    @apply flex flex-wrap justify-center gap-0.5 mb-1;
+  }
+
+  .corridor-node {
+    @apply w-2.5 h-2.5 rounded-sm border border-gravity-border/50;
+    background: linear-gradient(135deg, rgba(30,41,59,0.8), rgba(51,65,85,0.4));
+  }
+}
+
+@layer utilities {
+  /* Zone background colors with gradients */
+  .bg-zone-green-gradient {
+    background: linear-gradient(135deg, #22c55e20, #22c55e10);
+  }
+
+  .bg-zone-yellow-gradient {
+    background: linear-gradient(135deg, #eab30820, #eab30810);
+  }
+
+  .bg-zone-orange-gradient {
+    background: linear-gradient(135deg, #f9731620, #f9731610);
+  }
+
+  .bg-zone-red-gradient {
+    background: linear-gradient(135deg, #ef444420, #ef444410);
+  }
+
+  /* Glow effects */
+  .glow-blue {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5), 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.3);
+  }
+
+  .glow-yellow {
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5), 0 0 20px rgba(234, 179, 8, 0.3);
+  }
+
+  /* Text shadows for readability on busy backgrounds */
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.9);
+  }
+
+  @keyframes bannerPulseOnce {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    }
+    45% {
+      transform: scale(1.01);
+      box-shadow: 0 0 0 8px rgba(56, 189, 248, 0.25);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    }
+  }
+
+  .banner-pulse-once {
+    animation: bannerPulseOnce 900ms ease-out 1;
+  }
+}

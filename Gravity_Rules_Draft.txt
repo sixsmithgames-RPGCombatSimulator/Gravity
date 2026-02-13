@@ -1,0 +1,629 @@
+Notes
+20240625
+Make falling objects move inward and forward every turn and new objects arrive every other turn. Making movement forward cost the same energy as moving backward. Moving backward makes the ship go inward as well. And moving forward makes the ship go outward as well.
+Make the war path about catching ships, disabling them, stealing their resources. Make the engineering path about increased maneuvering, restoring integrity, restoring shields, protecting against attacks and events and escape. Make the science path to victory about finding resources and upgrades, increase abilities - basically a randomized war and engineering path combined that takes longer but is more rewarding if successful. When going toward one path, the ship is “busy” and can’t do other things. 
+Make the cards simpler based on the paths.
+20240705
+I could use chits or tiles for power and hull points instead of dice. The chits would be printed with something representative (see ship board) and the tiles would be colored wood or plastic. The tiles would stack up instead of being turned to a number, the cost for tiles might be higher than dice – having enough tiles to fill up a ship board versus having enough dice to fill up the ship board. Tiles might be easier for players to track than dice. Of course, I could change the number system, for example a single tile is needed to fill the slot instead of increments of six for each slot on the die. Tiles could be flipped to have two values, such as having two colors (green and yellow) more like a stop light system.
+Make a turn progress map and record a game or mock up a game with at least three players going different paths.
+
+Need to add a nod to interstellar.
+An alternate version could be made for naval vessels on the open sea encountering a maelstrom.
+
+For the gear idea that would allow all of the rings to rotate together, the innermost spring is one that should probably rotate around a gear in the center. But looking at the mechanics of it, the players will probably grab the outside ring and turn that. There are six sets of rings, not including the core Center. With gears and precision, cut rings everything can be fairly flat, as opposed to the tiered structure.
+GRAVITY
+Possibly the most powerful force in the universe is Gravity. As captain of your spaceship you are responsible for your ship and the lives of your crew. And they need you now more than ever!
+The Story
+Your memory is still hazy and the blaring siren only manages to amplify the throbbing pain in your head. Emergency lights are on, and your crew appears incapacitated. But what happened? The mission was going well but then what? You vaguely recall one of your officers reporting a strange sensor reading. 
+Staggering over to the nearest console you see a large warning that life support is almost gone, several sections of your ship are damaged, but when you take a quick glance at the external scans you immediately realize the gravity of your situation. You, your ship, and your crew, are caught in a massive gravity well.
+Luckily your two most experienced officers are waking up. Now it is up to you, you can revive the rest of your crew, get your drives back online, and hopefully keep your ship together long enough to escape! Oh and one more thing, sensors show lots of debris, large asteroids, and other ships of unknown origin. It’s time to survive: Gravity.
+QUICK START SETUP
+Place the gameboard (please see separate print out for game board assembly instructions) on a table with enough room for each player's personal game mat called a “Console” and other cards — A side table or lap tray may help. Give each player a Console, the five basic crew dossiers, 8 named crew tokens, power conduit chits and corridor chits, diamond markers. 
+Setting Up Your Ship
+Each player gets 24 power dice, 10 hull dice, 16 conduits, 5 corridors, and 8 crew tokens. Do the following for each game mat:
+Bridge section - set a Power die at 6, set each Hull die at 3. 
+Between the Bridge and the adjacent sections (Med-Lab, Engineering, Sci-Lab) place 1 conduit and 1 corridor chit over their damaged (printed on the game mat) counterparts.
+Engineering section - set each Power die at 1, set each Hull die at 3.
+Med-Lab section - set the Hull die at 2.
+Your ship has a SPEED of 0 (not marked on the console).
+Your Shields are at 0.
+Your Life Support is at 3 (because your Bridge is fully powered, the marker goes on the lower whole number which is a 2).
+Players may select which token represents their ship, starting with the youngest player first and proceeding to the left. Everyone places their ship token on the game board on the outermost ring nearest the owner and equidistant from the other players' ships.
+There are 6 captain cards, you may shuffle and deal them randomly to players (one each) or hand all of them to the youngest player who selects one and passes the remaining cards to the player on the right who then choses one and passes the remainder and so on until each player has a captain card. Discard any remaining. Read the Captains section later on for the starting bonuses and apply those bonuses to your ship now.
+There are 8 officer cards, you may shuffle and deal them randomly to players (two each) or hand all of them to the oldest player who selects one and passes the remaining cards to the player on the left who then choses one and passes the remainder and so on until each player has two officer cards. Discard any remaining. Place the captain and officers on your ship’s console and the remaining crew cards nearby to be placed on the console as you revive them.
+Each player gets 5 crew cards, one of the five basic crew types each, two officer cards, and a captain card. The cards show the basic bonus the player receives from performing an action with that crew member.
+There are 12 mission cards, deal them to each player until none are left, each player then selects one and passes the rest to the left. Each player takes a second card. Discard any remaining. Mission cards provide a way to score extra victory points.
+There are fifteen event cards, shuffled and placed face down next to the board. There are 45 upgrade cards, shuffled and placed face down next to the board. There are 120 resource tokens placed next to the board.
+Placing Objects Around The Gravity Well
+Two numbers, separated by a colon, are used to describe where objects go on the board. The first number represents the quantity of objects and the second number indicates the ring from the center where you will place the object - example: 3:4, so that’s three objects on the fourth ring counting from the innermost ring outward. Sometimes the number of objects vary based on the number of players. All objects are placed an equal distance apart (equidistant) from each other, so if it were just two objects they would be placed on opposite sides of the board. And, keeping that equidistant rule in mind, you get to choose where on the ring you think is best! Objects cannot be placed on the board where an object or ship already exists.
+Place the following objects on the board:
+Hazards - rifts in space. 2:4
+Asteroid clusters - clusters of space rocks. 3:5 and 2:7
+Debris - random bits & scraps. 2:4 and 2:6
+Hostile ships - small but dangerous. (Number of players):3 
+Wrecked ships - damaged and abandoned. (Number of players):5
+You are now set up to play, please read the quick start rules.
+
+QUICK START RULES
+Playing the Game
+This is a turn based game. You, and each player, will play your turns simultaneously following a preset sequence. See “Playing the Turn”.
+Players have Crew cards representing their crewmembers (basic crew, officers, and captain). When a crew card is Active, you can perform an Action with it during the turn.
+Players select Action cards from their Action Deck. Once selected, the cards are played in a specific sequence that helps everyone keep track of everything (all at once). Some actions have requirements such as the crewmember performing the action being in a certain Section of the ship.
+Each Active crewmember can Move around the ship as long as there is an undamaged route to that section of the ship.
+Each crewmember gets bonuses specific to their skills when performing an Action. You will use Actions to Generate Power, Revive crew, and perform Repairs on your ship. Later you will use actions to interact with objects to gain Resources and Upgrades, or ships to Trade with or even Attack.
+The space around the gravity well has many objects on it and each has their own qualities or perils. The rings each represent how quickly things move around the center and how damaging they are to your ship. The spaces are differently sized for each ring. Use any of the eight markers around the edge of the board to rotate each ring at the end of the turn — each ring rotates 1 space. The innermost ring will make one Cycle (one revolution) in 4 turns. The outermost ring makes one revolution in 36 turns, but the innermost ring is how you track the Cycles for anything that depends on Cycles.
+Playing the Turn
+Turns are performed simultaneously for all players.
+Sequence:
+Event - On every 4th turn (half a cycle), the black hole pulls in new objects. Add at least 1 object per player, up to 2 objects per player (so a 2 player game adds 2-4 objects). Place these starting on the outer most ring (fill empty spaces on the outer ring first; if needed continue inward), spreading them around the ring when possible (avoid placing them adjacent). Object types are random but weighted: 40% Debris, 30% Asteroid clusters, 20% Hazards, 10% Wrecked ships. After placing objects, draw one Event card and do as it instructs.
+Perform Actions (some upgrades/abilities provide extra actions)
+Internal Actions:
+Place Crewmember tokens (must have open path)
+Generate & Repair
+Integrate
+Revive
+Assemble
+External Actions:
+Maneuver
+Scan
+Launch, then Attack, then Retaliate (See Combat for more details)
+Acquire
+Auto-generate - Shields, Life Support, and anything the ship does automatically.
+Environment Damage
+Environment Movement
+Move Hostile ships 1 space forward - check if hostile can attack or launch
+Move each ring 1 of its own spaces forward (use a line on an adjacent ring)
+On every 4th turn, each object descends one ring, removed if it enters the center
+Falling (fall inward one)
+
+How to Win The Game 
+You are the captain. You have your ship and your crew, and you’re trying to survive long enough to escape. And if you’re lucky, you might finish your mission. At first you will need to handle any immediate threats, and hopefully repair your ship fast enough to avoid being sucked into the gravity well. Each captain has strengths and playing to their strengths will make it easier to gain victory points. Completing your mission despite all odds will give you the most victory points. The player with the most victory points at the end of the game wins.
+
+More About Your Ship
+Your ship is divided into sections. Each section requires at least 1 hull point and 1 power to function. Use the hull and power counters (a d6 for each) in the placeholders for each section.
+Power
+When all power counters in a section are at 6, the section is fully powered. All bonuses are shown under the power counters for each section. Bonuses available from fully powered sections are counted from the beginning of an Action played. Fully powered sections also provide a certain amount of life support which increases the life support meter shown underneath the crew dossier slots at the top of your console. 
+Life Support
+At the end of the turn, if you have more crew than you have life support for, choose which crew fall unconscious. If life support can be restored quickly (by the end of the next turn) those crew will automatically revive but have no actions that turn, otherwise they must be revived again as normal.
+Hull 
+Add and remove Hull points from your ships console for each point of damage repaired or suffered. Zero hull points is a damaged section. Damage from the environment is usually applied randomly to the ship. More on this later.
+
+
+It’s a Dangerous Environment
+The game board shows several possible orbits around the gravity well which is shown at the center. Each orbit requires a minimum speed your ship will need in order to maintain that orbit or you will fall close to the gravity well, wrecking your ship, before being flung back out. (You can recover if this happens but you will be far behind the other players).
+
+There are eight orbit rings grouped into the four color categories: Green, Yellow, Orange, and Red. If your ship is on a color other than green, your ship will take Hull damage from the extreme and unstable gravity. Yellow=2, Orange=4, and Red=8.
+
+Each color category of orbit rotates independently of each other but all in the same direction. You may choose if the rotation is counterclockwise or clockwise but once set does not change for that game. For the purposes of maneuvering the direction you have chosen for the rings is considered “forward”.
+
+On the board are various objects, more will be added during the game, and they will damage your ship if you end the turn with your ship and the object on the same space. Here is a brief damage summary for them:
+Hazards - Subtract 2 life support if within 2 spaces and take 2 damage.
+Asteroid clusters - 12 hull damage.
+Debris - 6 damage
+Hostile ships - 4 hull damage, or get within 3 spaces and they fire their 1 torp at you, get adjacent and they perform an Attack action doing 6 damage. If attacked while adjacent it will retaliate doing 6 damage.
+Wrecked ships - 9 damage
+Functional space station - 12 hull damage. If attacked while within 3 spaces it will retaliate doing 18 damage.
+A Few Basics
+Reviving your crew can be done by anyone and in any section of the ship but certain crew, sections, upgrades, and resources are going to provide benefits for this task. You don’t have to worry about collecting your crew from around the ship and bringing them to another section to be revived since your ship is equipped with an automatic gurney system powered by a very robust disc shaped robot that spends it’s off time vacuuming the corridors.
+
+Maneuvering around the game board is easy. Move your ship in, out, forward or backward a number of spaces determined by the amount of ACCELERATION plus any bonuses generated from your Maneuver Action. No diagonal movement however, if the separation line between spaces on an adjacent ring align with the middle (roughly speaking) of your ship’s occupied space, then either space is a valid move. 
+
+Trading with other ships is possible. Simply get within range, both ships must use the Aquire action. Time is of the essence, you have 30 seconds of real world time (please set a timer to be fair) to complete the negotiations and make the trade or your Actions and Power used are forfeit. If someone wishes to just give, or allow a take, only one of you must use the Aquire action as appropriate but this does not constitute a Trade.
+
+Damage to your ship 
+Disabled: When all conduits leading to a section are overloaded the section is disabled. All power in the section is lost, you may not route power to that section from any other section, and you may not use the section until at least 1 power conduit is restored and 1 power is routed to it.
+
+Damaged: Reducing a section to zero hull points means the section is damaged, and all power conduits into a damaged section are immediately overloaded so it is also disabled. Any crew unfortunate enough to be in a section when it is damaged are knocked out and must be revived again. Space is dangerous! A single repair action will bring a damaged section back up to 1 hull point, and another repair action is needed to restore at least 1 power conduit and it needs 1 power routed to it.
+
+Generating Power
+When using the generate Action you normally must be in Engineering and will get 1 power. If Engineering is fully powered you will get 3 power. If you use a crew with a skill for this you get their bonus as well. Additionally you may route as much power around the ship as part of this Action but more than 3 power through a single conduit will overload that conduit after the power is routed. 
+Using power - when an action calls for Power to be used it must be available in the section which the action is being performed.
+
+Making Repairs
+Thanks to advanced tools repairs are quick but use your Power. When you are repairing a Damaged section you must have a corridor and at least 1 conduit connected, and 1 Power available in an adjacent section, then move a crew into that damaged section and perform the repair which consumes the 1 power from the adjacent section. Note that Engineers and others can perform multiple repairs for the cost of 1 power. Example: Engineer goes into the Sci-Lab which is damaged and performs Repair (all requirements have been previously met ), so for 1 power the Engineer repairs the damaged section giving it 1 Hull point and it is now disabled, then repairs the disabled section restoring it to function with 1 power. 
+
+Combat
+Attack - Your ship must be within range of another ship - range is determined by your current scanner range including any bonuses from ship and crew. At least one crew member is needed to attack. Remember your ship is still in rough shape no matter how many bandaids you have applied. The defensive system must be functioning, supplied with power, and a crewman stationed there.
+ATTACKER BEWARE, other ships may return fire with a free Retaliate action against you. See Combat and ship damage for more details.
+
+Launch - From the Bridge you may launch up to 2 torps or 2 probes. They need a clear path to the target. A launched torp does 6 damage points. If the target is a player's ship, the damage is applied first to shields. If shields are zero’d then remaining damage is applied to one section of the ship. Torp damage is applied after all other weapons have been fired.
+
+Retaliate - When another player uses the Attack action they must notify the defender at the beginning of the Action Sequence, before any other actions are taken. If the Defender is also performing an Attack, they are given the opportunity to redirect that Attack. If the Defender is not performing and Attack, they may Retaliate and return fire with an Attack as a free action. The Defender must meet all the normal requirements for this retaliation Attack.
+
+Surrendering is a valid option for some and usually preferable to having your ship wrecked. If another player is attacking you, you may surrender before the attack is performed by giving them all your basic resources or, having none, an upgrade instead. The attacker must accept these, no matter how few, but may redirect their attack action or replace it with another action. 
+
+Shipwrecked! This is a terrible state akin to restarting the game for the captain whose ship is wrecked, but recovery is possible. A wrecked ship is defined as having fewer than 3 functional sections, 15 hull points, 6 conduits, and 2 corridors. This ship cannot maintain orbit and begins falling toward the center with the other objects. 
+
+Entering the gravity well. As you are pulled into and through the gravity well time stands still for you. You may exit the game gracefully at this point, always wondering where your ship and crew may have ended up, or you may reappear anywhere on the outermost orbit with your ship set to beginning conditions (see game setup) except you maintain any and all resources or upgrades you have. 
+
+Ending the game
+If half or more players exit the game, by escaping or otherwise, the game is over at the end of that turn. Tally the Victory Points and determine the winner!
+
+Victory Points
+To win this game you need victory points which are tallied at the end of the game. here is an example of some of the things you can get points for: 
+
+Now before all this mess started, you were on a mission and winning this game is based on who has the most points, and you’ll get victory points for completing that mission as well. Please see the quick reference sheet toward the back of this book for all possible victory points.
+
+
+That concludes the quick start rules. It’s up to you now good luck and have fun surviving, Gravity!
+THE RULES
+
+Since there is a lot going on, all at the same time, it's best to have each player read through the quick start rules at least once before playing. Then go on and play, but I’m here for you when you need me.
+The GRAVITY well
+This can be stated very generally as a point in space toward which everything is being pulled. The gravity well is pulling on your ship and there is nothing to stop you falling toward it - except your ship's drive and your forward speed. You don’t need to be a rocket scientist to know that having more power to move your ship and moving faster will keep you from falling. 
+Fortunately, the further away you are from the center, the less speed is required to maintain your orbit. The round game board shows several possible “stable” orbits (Green, Yellow, Orange, and Red circles) around the gravity well which is shown at the center. Each orbit is marked with the required minimum speed your ship needs to maintain to remain in that orbit. Speed is a vital resource now and is shown on your ships console, which is described more later. You will want to move your ship around the gravity well to gather up more resources for your ship, which requires enough speed to prevent being sucked in but for now let’s focus on the other objects orbiting.
+
+The Game board
+As mentioned before, at the board’s center is the gravity well. Surrounding this are several stable orbit paths, each requiring a certain speed to maintain. And the closer to the center you go the more hazardous these orbit rings are to your ship and crew. At the beginning fo the game the players ships and a few other objects are placed in the various orbits. The starting locations for each players ship is marked. And each turn more objects will show up on your sensors, or “arrive” during an event, and will continue along their orbit path.
+Objects are:
+Hazards - These are surrounded by a cloud of radioactive particles, at the core is an unstable spatial fluctuation - a rift. These could be the beginnings of worm holes. But one this is certain, being to close to these is dangerous.
+Asteroid clusters - clusters of various sized space rocks, some are several times bigger than your ship and they are moving erratically.
+Debris - random bits, possibly the remains of a ship or station, there could be some useful items among the scraps.
+Hostile ships - communication doesn’t seem to be an option, they very  dangerous and when destroyed they become debris.
+Wrecked ships/stations - the remnants of a ship or station that is somewhat intact but badly damaged and not functional.
+Functional space station - whatever brought you here has brought many others as well, a full space station mostly intact has sent out distress calls and would gladly offer upgrades in exchange for resources. But you must act quickly, the gravity is tearing it apart fast.
+
+As you navigate around you will get close to these objects, some will have resources you can use while others should just be avoided. Refer to the Actions section later on.
+
+Your ships CONSOLE (personal game mat)
+Your ships console tells you several very important things, almost everything you’ll need to survive. The main portion of you console shows each of your ship’s sections. Toward the top you have a slots to place your specific crew members as well as the standard ships crew and underneath is the required LIFE SUPPORT which tells you how many active CREW you can currently support. Each section of your ship has indicators that show you important information: The HULL integrity of each section, the POWER requirements for that section to be fully powered and how much POWER is currently routed to that section, the CREW currently in that section, and the benefits if the section is functional and fully powered. Two indicators on the right of your console show: current SHIELD level, and current SPEED. 
+At the beginning of the game your ship is not in the best shape, about half your ships sections are in need of repair (see game set up for determining which areas of your ship are damaged). Your ship is just barely moving forward and you and your officers are the only members of the crew that are conscious. Yea, it’s pretty rough. But more about this later. So many sections and so little time - Sure would be nice if you had some more help right?
+Your CREW
+Your crew is alive, according to presumably functional internal scanners, but life support is at critical levels. This is your first big decision in this crisis. Fortunately life support is built-in to each section of the ship so the more sections you have working the more crew you can revive and support. Reviving crew members is extremely beneficial but isn’t required. Each crew member has benefits aligned with their skill set which will make more sense if described later on - see CREW MEMBERS. 
+Captains
+A crew is only as good as their captain, and a captain is no good without a crew. There are six different captains, each has their own abilities and specialties, including effects on their crew as their leadership inspires or aids them. A captain on the Bridge provides their inspiration for all crew. But sometimes the captain is needed elsewhere on the ship, and when not on the bridge only the crew in the same section as the captain will benefit from the captain. The captain may perform any actions from the Bridge but that section specified on the Action card must be fully powered and connected to the Bridge. The captains have all the same skills of each basic crew member making them useful in any capacity. Plus each captain has special abilities which are as follows:
+Merchant - With a superior intuition garnered from many years of space trading the Merchant captain has an easier time of finding the resources needed. Any time you perform the Acquire action to gain a resource you will also gain a random basic resource. Your ship starts with 2 random upgrades. 
+
+Imperialist - With great discipline comes greater firepower. The long list of battles the Imperialist captain has fought helps when trying to find the weak spots. Any of your crew can perform the Attack action and gain +1 to the damage. Your Defense improves to +3 shield generation instead of the normal +2 when powered due to advanced shielding on your ship. Your ship starts with 3 random resources.
+
+Space Pirate - With cunning and guile learned from fighting the best pirates in the universe the Space Pirate captain can easily utilize any circumstance to their advantage. Your basic crew has cross-trained to make them more versatile and so they share the same benefits from the other’s skills as well as their own. Engineers, Scientists, and Medics are cross-trained. Pilots and Tacticians are cross-trained. Additionally you may play an Action card for a basic crewmember to perform along with an officer performing the same Action in the same Section. The result is that the crewmember who performs the same Action gets to use the officer's skills instead of their own. Your ship starts with an additional upgrade for which you may look through the deck and choose before any other players receive upgrades. (Pirates always have the best stuff.)
+
+Technologist - With plenty of funding and the cutting edge tech from thousands of planets the Technologist captain runs an advanced ship and an educated crew. All of your ship systems are advanced and so your basic crew gain a +1 bonus in addition to the normal skill bonus when performing Actions. Your Science Lab gains +3 range instead of the normal +2 when fully powered due to advanced sensors on your ship. Any upgrades you find requiring power will start with half-power when you perform the Integrate action.
+
+Emissary - With a zeal rarely matched by even the most fanatical faithful followers, the Emissary captain’s crew are so convinced of their abilities they sometimes manifest in extraordinary feats when the captain inspires them. At the beginning of each turn you may choose one of your basic crew to be inspired and gain a +2 in addition to the normal skill bonus when performing an Action that turn. Completing your mission will win the recognition you know you deserve - you count 1.5X mission VP at the end of the game (combines with Mission Specialist bonus).
+
+Explorer - With insatiable wanderlust and inexhaustible courage backed by competence, quick thinking, and a bit of luck the Explorer captain has a tough ship and a tougher crew. The bridge provides 5 life support in addition to any powered sections. Your crew are easier to revive and get back to their stations requiring only 8 revive tokens. After the start of the game, select one of your damaged systems and place a repair kit there. Using that repair kit will restore 2 hull points, 1 power conduit, and 1 corridor with a single repair action; choose wisely.
+Crew Members
+There are two types of crew members, the basic and officers. The basic crew are on every ship, they are the core group needed to run the ship and are trained in specific sections of the ship to maximize their effectiveness. While they are better suited to certain tasks and thus have benefits when performing them, all basic crew and officers can perform any Action.
+Basic Crew
+Pilot - 
+Evasion Tactics: take half damage from torps (must be on Bridge) on Maneuver
++1 acceleration on Maneuver actions.
+Engineer - 
+Efficient Repairs: 2X Repairs done for the cost of one.
++2 on Generate Power actions.
+Medic - 
+Anatomical Precision: +1 on Reviving.
++1 on assembling Med-Kit.
+Scientist - 
+Logical Process: +1 range Scan / Acquire (must be on Sci-Lab). 
++1 on assembling Probe.
+May use Generate Power action from Bridge or Sci-Lab if Engineering is functional and fully powered.
+Tactician - 
+Focused Fire: +1 damage on Attacking.
++1 Shield on Generate Power.
+May Generate Power from Defense if Engineering is fully powered.
+Officiers
+Each officer has a special ability plus basic crew skills, but they can do it better:
+Ace Pilot - 
+Expert Maneuvers: completely evade 1 torp per turn on Maneuver 
+Combined Evasion: half damage from torps, can be combined with basic pilot to reduce torp damage by half again (must be on Bridge). 
++2 acceleration on Maneuver. 
+Chief Engineer - 
+Ingenuity: perform Repair on any ship section from Engineering. 
+Miracle Repairs: 3X the Repairs done for the cost of 1.
++3 on Generate Power. 
+Doctor - 
+Stim packs: use Doctors action to make 1 crew (must be in the same section as Doctor) perform 2 actions this turn. Place a marker on that crew’s card each time the stim pack is used on them. At the end of the turn, if that crewmember has three stim packs, they become inactive.
+Medicine: +2 on Reviving
++2 on assembling Med-Kit.
+Senior Scientist - 
+Savant: all Sci-Lab upgrades require only half power. 
+Intelligent: +2 range Scan / Acquire
++1 on assembling Probe. 
+May Generate Power from Bridge or Sci-Lab if Engineering is functional.
+Master Tactician - 
+Warheads: each Torp you launch (whether found or built) does double damage. 
+Strategy: +2 damage when attacking
++2 Shield on Generate Power. 
+May Generate Power from Defense if Engineering is functional.
+Android - 
+Robotic: can move thru and occupy damaged areas, does not require life support. 
+Robust Repairs: 3X the Repairs done for the cost of 1.
++3 on Generate Power.
+Mission Specialist - 
+Fervent focus: once per turn select a crewmember to use their Action toward Assembling a basic resource (Med-Kit, Spare-Part, Probe, or Torp). The result is doubled.
+1.5x Mission Victory points at the end of the game.
+First Officer - 
+Competence: Perform any Action as any basic crew member with an additional +1 wherever they get a “+”.
+Life Support
+Your ship's life support system isn’t technically functional, but it is providing just enough for now and you can make it produce more by repairing and supplying power to each section of the ship. The more crew you have active the harder the system has to work, and again it isn’t working well. The amount of life support required is shown toward the top of your console corresponding to the number of currently active crew. If you have more life support than indicated but not enough for the next crew member, just leave the marker at what you can support. At the end of your turn any active crew that are not supported for any reason will fall unconscious and need to be revived again.
+
+Ship sections
+For each section you have you can put crew, power, and upgrades into it. The number of circles represent the number of crew that can be placed at one time. When you move your crew from section to section you will place their token on the appropriate unoccupied circle. The squares labeled PWR represent a place holder power and the amount required to power each is 6. Power can be stored. Once you have a functional section (at least 1 hull point and 1 power), place a crew member in it and then simply play an action card associated with that section to get something out of it. Here is a list of sections, what they need, and what you get:
+Bridge - The brains of the ship, complete with artificial intelligence. All the sensor readings and ship information feeds into this location. Your Science Lab has more equipment for scanning and retrieving items but your Bridge will do in a pinch. And this is where you need to maneuver you ship from. Objects and debris can damage your ship so watch out! 
+Hull: 12 
+Power required: 6
+Benefit: With full power you can perform a Maneuver action and gain +1 Acceleration each turn, and generate 3 life support 
+Engineering - This is the heart of your ship. You and your crew can use this to generate some much needed POWER and once it is fully powered it will make generating POWER easier. You can store power and spare parts here and install some helpful upgrades as well.
+Hull: 18 
+Power required: 12
+Power storage: 12
+Benefit: With full power you get 2 additional POWER when generating POWER, and generate 4 life support
+Drives - You won’t be going anywhere without these. Repair them and supply them with power and they will turn that into the acceleration needed to maneuver you ship around and through the hazards. Note your crew do not enter the engine section, they can access it from Engineering for repairs and the maneuvering action happens on the Bridge.
+Hull: 12
+Power storage: 18
+Benefit: With even the slightest bit of POWER they will move your ship
+Medical Lab - Some say it is not an essential section but regardless it does have some really helpful tools to revive your crew faster. Assign crew and supply with power to reap the benefits. You can still try slapping the crew back to health if you prefer, and that can be done anywhere but I recommend you use a med kit. 
+Hull: 6
+Power required: 6
+Benefit: With full power add 2 when reviving crew in this section, and generate 4 life support
+Science Lab - With this section functioning you can Scan debris, wrecks, asteroids, and other ships more accurately and save precious time. Then acquire your finds (resources and upgrades).
+Hull: 6
+Power required: 6
+Benefit: With full power add 2 to the range of your Scans and Aquire actions, and generate 2 life support
+Defensive systems: Once these are functioning again it is time to get your shields up and go hunting. Supply with plenty of power to make sure your efforts aren’t wasted and would-be hunters will think twice before starting something with you.
+Hull: 6
+Power required: 6
+Power storage: 12 - needed to charge weapons
+Benefit: With full power increase SHIELDs by 2 at the end of your turn, and generate 1 life support
+
+RESOURCES
+Power
+Your ship can handle a lot of power under normal conditions, but right now the transfer of power is limited. Whenever a crew member generates power they can reroute as much power as they want anywhere around the ship. But the power conduits can only handle so much, if more than 3 power is transferred to a section per intact power conduit during your turn, a power conduit leading into the section overloads and will need to be repaired.
+
+Shields and Hull integrity and Damage
+Your ship’s hull is alternately being stretched and smashed by the varying forces around you not to mention the minor debris constantly bouncing off of your ship. So of course it your ship will take damage, rip open, crumple, the power conduits will overload, and your corridors can collapse or tear open and vent into space. Your ship is literally coming apart at the seams! But its still a tough little ship and it was built for space. 
+
+Also enemies will likely attack you at some point! when a section is disabled it stops providing any benefits to the ship and loses all its power. When a section gets reduced to zero hull points, any crew in that section get knocked unconscious. Typically all of your shields must be knocked out before sections get damaged, so be sure to protect your ship with some additional SHIELDs.
+
+SHEILDs are very helpful in preventing your sections from being damaged. All damage done is measured in points. For each point of damage you receive you will lower your SHEILD value first, unless damage is from a collision or other special circumstance. When you restore power to your Defense section you will automatically increase your SHIELD value at the end of your turn. Another way to increase your SHIELDs is when you generate POWER with a crew member trained for the Defense section, allowing you to syphon a little power to your SHIELDs at the same time - you will thank them later. 
+
+HULL Integrity is similarly easy to increase, just add and remove HULL points from you ships console for each point of damage repaired or suffered. If you are out of hull points, that’s really bad and results in a damaged section, but don’t worry too much, it can happen to even the best captain. Physical damage from the environment is usually applied randomly to the ship. More on this later.
+
+Disabled vs. Damaged: Let’s get a handle on how to record the damage. Each section of your ship is shown on your console and it can be disabled or damaged. Power conduits and corridors can be damaged as well. When a corridor, treat it as though it has a max of 1 hull point, is damaged your normal crew shall not pass until it is repaired.
+
+Disabled: When all conduits leading to a section are overloaded the section is disabled. All power in the section is lost, you may not route power to that section from any other section, and you may not use the section until at least 1 power conduit is restored and 1 power is routed to it.
+
+Damaged: Reducing a section to zero hull points means the section is damaged, and all power conduits into a damaged section are immediately overloaded so it is also disabled. Any crew unfortunate enough to be in a section when it is damaged are knocked out and must be revived again. Space is dangerous! A single repair action will bring a damaged section back up to 1 hull point, and another repair action is needed to restore at least 1 power conduit and it needs 1 power routed to it.
+
+SPEED
+As shown on the far right of your console, the ship is traveling at a certain forward speed. The primary engines are beyond repair and all you have to maneuver your ship are thrusters. Thruster require power and when used convert that power to ACCELERATION which you can then use to maneuver your ship around. If your SPEED is higher than the requirement for your orbit you move around that orbit faster.
+
+
+GAME PLAY
+So you’re the “rules” guy or gal? Thanks for taking one for the team to spend the time and learn how to play. But, just between you and me, I know why you read the rules - TO WIN! Read on my friend, read on. 
+
+The TURN
+Turns are performed simultaneously for all players. Each one is described in more detail below.
+Sequence:
+Event
+Actions:
+Planning 
+Reveal
+Moving Crew 
+Actions - perform all advanced and basic actions in the following sequence: 
+Revive
+Repair 
+Generate
+Maneuver 
+Scan 
+Acquire 
+Attack & Launch & Retaliate (See Combat for more details)
+Assemble
+Auto-generate - Shields and Life support and anything else… 
+Orbiting or falling 
+Environment Movement - Move Hostile ships randomly 1d3 spaces forward (counter clockwise) and attack if adjacent to a players ship, and move all Stations, Wrecks, Asteroids, Debris forward 1 space.
+Collisions - If two ships or objects land in the same spot a collision occurs, make a collision check for each player ship. 
+Environment Damage - If a players ship touches the yellow, orange, or red orbits take damage as follows: 
+YELLOW orbit: Hull damage = 2
+ORANGE orbit: Hull damage = 4, Conduits damaged = 1
+RED orbit: Hull damage = 8, conduits damage = 2, corridor damage = 1
+Escape
+
+
+I want to have power get used faster and get more done. Increase the ability to maneuver around the board, make acquire action adjacent space only?, make all objects fall slowly to help remove them? and pull ships toward center of board. Make the hostiles “smarter” have them move toward closest ship? - no torpedo?, just get adjacent and fire. Scanning hostile adds 2 damage to each die rolled. Change free maneuver on bridge to plus 1 acceleration. only one maneuver per turn? Make it easier to find goodies on objects. Allow player to choose upgrade for space station mission. 
+
+EVENT - The gravity well is unstable, there are many random effects that occur while you are trying to escape and one event occurs at the beginning of each turn. Draw the event card, follow its instructions, and see what happens!
+
+ACTIONS
+Each player gets an Action deck. The decks have an exact number of basic and advanced actions that each player selects from and then places face down. For each active crew member you have, you can perform one action. 
+As captain, no one knows your ship better than you and your captains chair has the entire ship within reach, which allows you to get more done, so you may perform 2 actions per turn. 
+
+Actions are performed in the specific sequence and any actions that cannot be played for any reason, such as not enough power or not having a crew member in the section, are forfeit that turn for that player. Plan wisely.
+
+Planning - Take stock of the current scene, choose your actions and place them face down. During this time you may hail another ship and see if they respond (generally done by waving at the other player, or passing the snack bowl), it is completely up to the players how much time is spent coordinating, negotiating, pleading for mercy, etc - you may want to set a timer. 
+
+Advice on choosing actions: Look over the number of crew you have and where they are located on your ship, then look over your ship sections and resources. There are upgrades and resources available on most of the objects. Look at the your position on the game board with adjacent objects and player and then decide which action(s) will help you accomplish your mission.
+
+Place one action face down for each active crew member you have, and two actions for the Captain. After all players have chosen the actions they want to perform and placed the action cards face down, the cards will be revealed simultaneously.
+
+Reveal and Assign - Flip your action cards face up, and use the second set of crew tokens to assign your crew to each task, keep track of power needs for each action and remember to route accordingly. As actions are completed remove the crew token from the card. This is a very helpful step and keeps your actions organized.
+
+Move crew: Each turn you may move your crew (represented by a crew token) to an adjacent section or leave them be. You can choose to move before or after other actions. Each crew has benefits that help with certain actions but that doesn’t mean they have to do that, so move them where you need them the most. You will need move to get close enough to do repairs, more on this later.
+Simply move your crew token thru an intact corridor, damage corridors normally prevent movement until they are repaired, to the desired section. Also if you want to move further, you can do so in lieu of your regular action, however movement may not be used for an action.
+
+ACTION SEQUENCE
+Integrate - Once you have acquired an upgrade it is placed face down next your console and your crew are busily working on installing it. But they won’t activate it until you give the order. Use this action to activate your upgrade and place it face up.
+
+Attack - Your ship must be within range of another ship - range is determined by your current scanner range including any bonuses from ship and crew. At least one crew member is needed to attack. Remember your ship is still in rough shape no matter how many bandaids you have applied. The defensive system must be functioning, supplied with power, and a crewman stationed there.
+ATTACKER BEWARE, other ships may return fire with a free Retaliate action against you. See Combat and ship damage for more details.
+
+Launch - From the Bridge you may also launch up to 2 torpedo, if you have one. The torpedo needs a clear path to its target. A launched torpedo does 6 damage points. If the target is a players ship, the damage is applied first to shields and then to one section of the ship. Torpedo damage after all weapons have been fired. launch probes or torps at objects or other players ships 
+
+Retaliate - When another player uses the attack action they must notify the defender before any other actions are taken. If the Defender is not already attacking, anything or anyone, they are given the opportunity to return fire as a free action. The defender must meet all the normal requirements to attack except having an unspent action.
+
+You may attack objects to destroy (remove from the board) as follows: 
+Player ships - becomes wrecks when reduced to 0 hull points - these wrecks may not be destroyed.
+Hazards - nothing to see here, keep your distance
+Functional space station - take 12 shield points and 24 hull points of damage to become a wreck
+Wrecked ships/stations - take 18 points of damage to become debris
+Hostile ships - take 8 points of damage to become debris
+Debris - take 6 points of damage to be destroyed
+Asteroid clusters - take 18 points of damage to be destroyed
+
+Maneuver - Move your ship a number of spaces determined by the amount of ACCELERATION you generate for your current engine plus any bonuses. Beware! Everything is moving and there are random events that can affect even the best laid plans.
+
+Scan - You may scan other ships to gain an advantage - specifically the ability to target sections on their ship when attacking, you must declare the section you are attacking before rolling damage - nothing happens if all damage is absorbed by SHIELDs. You also get a +2 to damage when attacking hostiles. You may Scan for resources or ship upgrades from objects.  Normally you must be in the adjacent space of the object but a fully powered Science Lab increases that range to 2 spaces away. Roll a d6 to see what you find. 
+Hazards - nothing to see here, keep your distance
+Asteroid clusters - on a 6 you find a random basic resource
+Debris - on a 4+ you find a random basic resource
+Hostile ships - scanning before attacking will add 2 to the total damage you do. And once destroyed they become debris. 
+Wrecked ships/stations - on a 2+ you find a random basic resource, in addition on a 5+ you find an upgrade 
+Functional space station - Automatically gain a basic resource, in addition on a 4+ you find an upgrade. 
+
+Acquire - If you happen to be lucky enough to find something, well then finders keepers! Get that object that was revealed by your scanners on a transport and get it aboard immediately. You need all the help you can get! If you acquired an upgrade place it face down next to your console, place the upgrade card face up on top of it, your crew will begin installing it immediately and you may activate it next turn by using a crew members action that is in the appropriate section for the upgrade.
+
+BASIC ACTIONS
+Generate - Your engineering room contains the ships power source. It has been damaged but can be made to function with some help. As you produce POWER you can route that around the ship where it is needed. Sections of the ship need to be fully powered in order to benefit from them. 
+
+You can also collect up spare parts for sections of the ship and store them for the eventual repairs. Roll a d6. Certain crew will give a bonus to your roll. You need to get a total of 6 points to collect up a spare parts kit. If your result is 8 or more you get two kits. Use the d6 to hold the place for points toward spare parts if 6 was not reached.
+
+From your functioning and powered defensive systems, or the bridge, you can convert 1 POWER from anywhere in the ship to increase SHIELDs by 1. Taking power from other sections loses the benefits, including life support, from that section.
+
+Revive - Is there a doctor on board? Play this card to work on reviving a crew member. Details of reviving a crew member are:
+Choose a crew member from your incapacitated crew cards to revive and roll a d6. Performing this action with a Doctor crewman will add 2 to your roll. If you are using a powered Med Lab add 2 to your roll. You need to get a total of 6 points to revive a crewman. If your result is 8 or more the crew can also perform their move and action this turn. Use the d6 to hold the place for points toward revival if 6 was not reached.
+
+You can also prepare a med kit for future use on crewman and store them. Roll a d6. Certain crew will give a bonus to your roll. You need to get a total of 6 points to prepare a med kit. If your result is 8 or more you get two kits. Use the d6 to hold the place for points toward med kits if 6 was not reached.
+
+Med-Kits: Note that Med Kits help in much the same way a Doctor or powered Med Lab helps by adding 2 to your revive roll.
+
+Repair - By replacing a damaged panels, reconnecting power conduits, and you can get some functionality back. Choose a section of ship on your console that is disabled or damaged, then move a crew member to and adjacent section. You will need to restore power and access if those are damaged, so use one repair action to fix any damaged power conduits and another repair action to clear/reinforce the corridor. Then use another repair action to repair the adjacent section that is now accessible. Restoring a disabled system requires one repair action. Restoring a damaged system takes two repair actions, first to repair it up to 1 HULL point and a second to bring it back online. 
+
+Repair the hull: There are micro fissures everywhere! Get the fusion welder and knit those molecules back together. Using this action will increase your HULL points by 1.
+
+a damaged section by being adjacent to it or repair the hull by being in it.
+
+Spare Parts: Note that using spare parts when repairing speeds your progress, essentially doubling what you can normally do.
+Orbiting and Falling - Compare your ship speed with the orbit speed requirement. Move ship inward 1 ring unless orbit speed achieved, if orbit speed achieved maintain orbit and move 1 space fwd with environment, if orbit speed exceeded move additional spaces forward by amount exceeded. Collisions may occur! 
+As mentioned before, YOU’RE FALLING! Until you reach an orbit where your forward SPEED will maintain the orbit. Each turn your ship will fall one orbit closer to the center. But as you fall you will pick up speed. For each orbit you descend by falling you gain 1 SPEED. Once your ship has enough SPEED to maintain orbit it will move one space forward with all the other objects. After maneuvering to a higher orbit it is common to have a higher SPEED than needed for the orbit. Simply move additional spaces forward by the amount your ship is exceeding the orbit speed. Remember, you won’t slow down automatically.
+
+Environment movement -
+Rotation: The board moves, and everything on the board moves. This movement represents the pull of gravity. There are four main rings
+
+Hostile ships: A Hostile ship has enough power to move 3 spaces each turn toward the nearest player ship and attack each turn any player ships immediately, at any point during their move, that it is adjacent to them. If the player ship is 2 or 3 spaces away, not adjacent, it will launch a torpedo - of which it has one and only one per hostile ship. Do not move it off the board or into the gravity well itself if so directed, simply move it along the shortest course that avoids its own peril.
+
+Objects: Each of the following objects moves 1 space Inward on an 8th:
+Asteroid clusters, Hazards, Functional space station, Wrecked ships/stations, Debris
+These objects can damage your ship but they can also be a resource if approached and searched carefully. These objects have enough speed to maintain their orbits.
+
+Optional - Decaying orbits: Once an object completes a full revolution it decays to the next lower orbit. Objects that reach the center are removed from the game.
+
+Optional - Gravity assist: The gravity of the objects can be used to increase your ships speed by performing a ‘drafting’ maneuver. If your ship is maintaining orbit and you are directly behind a large object (asteroid, wrecks, or station) at the beginning of your next turn gain 1 ACCELERATION and apply it to your maneuver action that turn. If unused roll a collision check. 
+
+Collisions -
+You may actually collide with something! Maneuvering through spaces with objects does not cause a collision as you are piloting around them and will do you best to avoid them. But objects are moving as well and sometimes events will move them in unexpected ways. If your ship is on the same space as another ship or object between the end of your action phase and the beginning of your next action phase, a collision occurs and that could be bad! Do the following: 
+Make a COLLISION CHECK: Roll a d6, 
+1 or 2: take 2 hull damage 
+3 or 4: take 4 hull damage 
+5 or 6: take 6 hull damage
+All damage is applied to one section of your choice following the normal damage rules. See Combat and ship damage.
+
+Environment damage -
+If your ship ends its turn in a space touching an orbit other than a green orbit which is when your ship will start to feel some of the more severe effects from gravity. The more severe damage alway occurs when closer to the center, which is represented by different color rings. This generally means losing hull integrity along with some additional damage to power conduits and corridors. You may assign the damage following the normal damage rules. The amount of damage your ship suffers is as follows and shown on the game board for quick reference: 
+YELLOW orbit - 2 hull points 
+ORANGE orbit - 4 hull points, and 1 power conduit is damaged
+RED orbit - 8 hull points, and 2 power conduits is damaged, and 1 corridor
+
+Hostile ships: are small craft that arrived here much the way you and the other captains did. They move 1d3 spaces toward (move them the shortest route) toward the nearest player, but they will never intentionally collide or move into range of a hazard. 
+They are dangerous to player ships, equipped with decent weapons and 1 torp. Once per turn they will attack immediately, with 2d6 plus 4, any adjacent player. This can occur at any point during their move. If they are 2 or 3 spaces away from a player they will fire their 1 torpedo. 
+You may attack them, and they are destroyed after taking 8 points of damage. If they are destroyed before using their torpedo it become a discoverable item in addition to a random item in the left over debris field.
+
+Hazards: Intense radiation coming and unstable space rifts cause 3 points of damage for all ships within 2 spaces. Hostiles ships will avoid these.
+
+Escape - It’s all about speed. Your ship’s drive is too damaged to escape the gravity well with enough speed to get you anywhere by itself, even if you could get everything repaired over time your ship lacks the components necessary for long distance travel, you’d be a drift. Your only hope is to use the gravity to your advantage and slingshot around it! Computer simulations show that will be enough to get you to the nearest repair base. It will take some foresight, planning, courage, and luck to get your ship out of this mess. 
+Slingshot: Position your ship in the outer most green orbit. At the end of the turn, simply declare to all players that you are performing the slingshot maneuver. Then, at the beginning of your next turn, as captain, you and your officers must focus all your attention (actions) on this task. The Captain must be on the bridge but the officers may be on Bridge, Sci-Lab, or Engineering. The rest of your crew may perform any basic actions as normal, but not advanced actions, and will need to minimally route more power to your Drive during the next few turns. 
+Warning: This has to be planned carefully, colliding with objects is highly probable, running short on power is likely, being attacked by hostiles might happen, passing near enough to or thru hazards will definitely do additional damage. Good luck!
+First turn: Beginning form the outer-most green orbit, and during the normal turn sequence you must use a maneuver action, with the appropriate power consumed for this based on your crew, upgrades, and ship bonuses, and move your ship directly to the inner most red ring. The rest of your turn plays out as normal including take damage from the red orbit, checking for collisions, and being attacked. 
+Second turn: use a maneuver action, with the appropriate power consumed for this based on your crew, upgrades, and ship bonuses, and move 12 spaces forward around the lowest orbit. Time acts weirdly this close to the gravity well. Be sure to generate some extra power and recharge your drive this turn.
+Third and final* turn: use a maneuver action, with the appropriate power consumed for this based on your crew, upgrades, and ship bonuses, and move directly to the outer green ring. If you have survived thus far (your ship is not wrecked) then at the end of this turn you have escaped! 
+*NOTE: If on the second or third turn your drive is disabled, or worse your ship is wrecked, then follow the third movement steps as described above as the gravity, but instead of escaping your speed is 1.
+
+RESOURCES AND UPGRADES
+Resources*: 
+Scans sometimes result in something being found and these are represented by resource cards. Some resources are used immediately, others can be saved for the right moment. The following is a list of resource cards that you will find in the Deck of Acquisition:
+8 Upgrade - Draw an upgrade card
+2 Antimatter - Convert for 2 ACCELERATION when maneuvering
+4 Fuel cell - Convert for 1 ACCELERATION when maneuvering
+8 Power cell- Gain 1 POWER
+6 Medical kit- Plus 2 to revive roll
+6 Spare parts - Free Repair Action when Repairing
+4 Energy weapons- Bonus of 1 to your next attack damage
+2 Particle weapons- Bonus of 2 to your next attack damage
+1 Phased weapons- Bonus of 3 to your next attack damage
+4 Phased shielding- Increase shields by 3 levels
+5 Torp - Launch and deal 6 damage to your target
+*Discard each resource after using it 
+
+Upgrades: 
+There are several possible upgrades to your ship. Upgrades are represented by Upgrade cards. To benefit from an upgrade it must be activated on your ship. The following is a list of upgrade cards:
+
+*Not updated:
+2 Ion engine - Increases the ACCELERATION generated from maneuver action by 1
+2 Plasma engine - Increases the number of POWER tokens from generate action by 1
+2 Nanobots - Med Lab now provides a +3 on revive roll.
+4 Bio-filters - Automatically generates 3 LIFE SUPPORT each turn
+1 Teleporter - Acquire action is a free immediate action after Scanning.
+2 Neutron calibrator -1 to collision check rolls.
+1 Shield Modulator - take half damage when subtracting damage from shields
+1 Bio-engine - plus 1 LIFE SUPPORT per powered section, excludes thrusters
+4 High Density plates - take half damage from environment damage 
+1 A.I. Defense - Scan of enemy ship is a free automatic action when attacking.
+
+COMBAT AND SHIP DAMAGE
+RED ALERT! - First of all, you have been on red alert since you started, but now you are being directly attacked! This section is a bit lengthy in hopes of preventing any confusion during the heat of combat. 
+Attacking: When you attack you will need to determine the target of your attack and the damage points from your weapons fire which is done by rolling a die, a d6, for the crew member stationed in the Defenses section using the Attack action. The weapons normally use 2 power. But you can overcharge your weapons for extra damage by using additional power for a plus 3 to damage. Overcharging a weapon automatically overloads a power conduit leading to the Defenses section. 
+
+Scanning the enemy: If you have previously scanned the ship you may specify a section to hit with your targeted attack - if you get through the shields then apply the remaining damage to that section. 
+Once a section is reduced to 0 hull points the remaining damage points from a targeted attack are assigned to the corridors leading in to the section and then distributed equally to adjacent sections with any odd number of points assigned by the damaged ship’s captain.
+
+Optional (harder) - Escalating damage: Normally you may spread out damage as you see fit. Taking a single hull point from a section isn’t too much to worry about, unless it was the last hull point. But if more than 1 hull point is taken from a section when applying damage your ship will start to come apart, see below to determine the additional damage to conduits and corridors leading to that section: 
+3 or 4 HULL points = power conduit overloads
+5 or 6 HULL points = power conduit overloads and a corridor collapses
+7+ HULL points = all power conduits overload, section is disabled, lose all power in that section - note this changes the amount of life support available at the end of this turn. 
+Reducing a section to 0 hull points means the section is damaged as well as disabled and any crew in that section are knocked unconscious and will have to be revived again.
+
+Example Combat: An Imperialist captain first scans a Pirate ship, targeting the Engineering section, and then opens fire. Using everything available, 2 torps are launched by the Captain via the Bridge section, and two crew members fire weapons from the Defenses section - A tactician and a Master tactician. The Space Pirate captain is alerted to the incoming fire and simultaneously retaliates! 
+
+The Imperialist attack: Weapons fire is will arrive followed by the torp. Each crew elects to use the overcharge option, overloading two power conduits, and spends a total of 8 power, rolling 2d6 = a 1 and a 5, using the captains ability to re-roll the 1, it becomes a 3. So with +3 for each overcharge, +2 from the Master tactician, and +1 from the tactician, the result is 17. The pirate ship had its shields up to a strength of 9 so 9 damage points are used reducing the shields to 0. The remaining 8 damage points are assigned to Engineering which started the turn with 9 hull points. 8 hull points are removed and per the escalating damage rule 6+ hull points taken means that section is disabled, all power conduits leading in are overloaded, and all power in that section is removed. Next the torps arrive, the pirate ship has an Ace pilot as well as a basic pilot at the helm and evades one torp, and takes half damage from the second one resulting in 3 points damage. Since Engineering only had 1 point left, it is now damaged and the engineer stationed there is knocked unconscious, the remaining 2 damage points apply to each connecting corridors, 1 point each. A devastating attack to be sure.
+
+The Space Pirate retaliates: Simultaneously the Pirate captain will return fire, but keep in mind, they were not already attacking anything or anyone else, they haven’t scanned the enemy ship and they don’t get to launch torps as part of this action. Fortunately two crew are stationed in the defenses section, one is a tactician and the other a medic, and weapons are charged. The tactician attacks, while the other crew aides in the effort, electing to use the overcharge option and spends a total of 6 power, rolling 2d6 = a 1 and a 5 with +3 for each overcharge, +1 from the tactician, and +1 from the tactician’s helper, the result is 13. The imperialist ship had its shields up to a strength of 15, so all 13 damage points are used reducing the Imperialist shields to 2.
+
+Ultimately the Space Pirate captain is in a terrible position and may very well end up a wrecked ship unless something can be offered to the Imperialist or another captain comes to their aide. 
+
+Other Damage:
+YELLOW orbit - 2 hull points 
+ORANGE orbit - 3 hull points, and 1 power conduit is damaged
+RED orbit - 4 hull points, and 2 power conduits is damaged, and 1 corridor 
+Your ship will stop taking damage from the gravity well if you are in the green orbit.
+If you are suffering damage from collisions following the COLLISION CHECK procedure described earlier. 
+
+Avoiding Attacks: If you are suffering damage from another ships attack you may want to offer a cease fire in exchange for something. Typically upgrades are good tools to negotiate with, failing that you can offer spare parts, med-kits, probes, and yes - even torps. If an agreement can’t be reached you might try hailing another ship for help. 
+
+WRECKED SHIP -
+What happens if all your hull points reach zero? It’s a pretty rough spot, but it’s NOT game over. A wrecked ship remains wrecked until shields and hull integrity are increased to half, 3 sections are repaired, and 3 crew are active. While wrecked the player must spend all possible actions on achieving these requirements with his Captain and two officers, but no advanced actions. The players ship is treated as a wrecked ship for the purpose of other players and may be used to gather resources as though an object, but no additional damage is taken from that encounter and none of the supplies or upgrades discovered are taken from the player with the wrecked ship.
+
+GAME SETUP: Instant game, just add water (not really, but almost that easy).
+Objects such as Asteroids and Debris fields are placed randomly around the board in various orbits. You can use a directional die, or a spinner, and a d6 - 1 being the closest to center orbit, and 6 being the furthest yellow orbit but nothing goes in the green orbits. You can also space them equally around the board. But feel free to randomize placement however you prefer with at least one space between objects on the same orbit ring.
+Place your ship on the starting position (white dot). Then place the following number of each: 
+2 Asteroid clusters 
+1 Hazards
+0 Functional space station
+0 Wrecked ships/stations
+2 Debris
+Hostile ships - if total players less than 4, add a hostile ship for each missing player
+More objects will show up as the game progresses, changing the board as you go.
+
+MISSION CARDS
+What’s really important? - Your MISSION - What are you doing here?
+The top priority is survival for some, but for a few survival is only important IF necessary to complete their mission. After all space is a dangerous place, but you knew that before you climbed aboard. Every mission has a basic goal and each goal has a priority. But there is always room for over-achieving. After you take stock of your situation, get your crew and ship functioning, then plan your mission and how to survive long enough to get it done. Completing your mission will give you the most points toward victory. 
+Now deal the cards face down from the Mission deck. Each mission card describes a mission and lists the primary, secondary, and possibly tertiary goals of that mission. Each goal has a point value assigned which you are awarded if you complete it by the end of the game. Randomly deal each player two missions cards face down, each player looks at their mission cards, selects one to keep and passes the other to their left. Keep them face down during the game, you may look at them whenever you like, but try to keep them a secret from the other players. 
+
+CAPTAIN CARDS
+Either take turns selecting your Captain, or shuffle and deal the Captains evenly choosing only one, discard any extras. This is a key selection toward your mission goals, which Captain will best help you to complete the mission? 
+
+CREW CARDS
+Shuffle and deal the Advanced crew cards to each player. Select one advanced crew member card from your hand and pass the rest to your left. Once you have selected your second advanced crewman, discard any remaining. 
+
+Currently writing this - IDEA the Officers are unique from any abilities of the basic crew, but the advance crew cards replace two of your standard crew. 
+
+
+
+YOUR SHIP - How bad is it?
+Bridge - Fully powered, half hull points, all conduits and corridors connected are intact
+Engineering - 1 power, half hull points, 1 conduit and the corridor to the Bridge are intact, the rest are damaged
+Med Lab - Disabled, 2 Hull points
+Engines - Damaged, all power conduits overloaded
+Science Lab - Damaged, corridors connected are damaged
+Defenses - Damaged, corridors connected are damaged
+
+You may want to quickly refer to Ship Damage where the difference between “damaged” and “disabled” sections are explained.
+
+Your ship has a SPEED of 1. From your starting position you can see that you are going to begin falling at the end of your first turn. Remember that as you fall you will gain SPEED so be sure to track it on your console. 
+
+ACTION CARDS
+Each player gets their own deck of action cards containing a limited number of the various actions you can perform each turn. The number of actions you may perform each turn is equal to the number of active crew you have plus 2 for the captain. Each action requires one card. If you don’t have enough cards or enough crew you cannot perform more actions that turn.
+
+
+
+START THE GAME!
+
+
+ADVANCED GAME PLAY
+Alternate Game play - Fast play start: 
+If you like to spice things up and play a little faster game try this option. 
+Setup a standard game and then make the following changes to your ship: 
+Add 6 HULL integrity where you like
+Increase your SHIELD level to 6
+Your Med-Lab is fully powered
+I actually encourage home-brew rules for experienced players only. It is quite easy to break a game and make it one sided. After you have played a few times and get a feel for the nuances of the game feel free to do as you like, it’s your game after all. BUT remember the most important and unbreakable rule for a game - Have fun playing! I’d love to hear about your experience playing the game - please send me your comments, suggestions, hatemail or lovemail, dreams, aspirations, and/or favorite color to gravityboardgame@gmail.com
+
+Alternative Game Play - Long play start:
+Setup a standard game and then make the following changes:
+Your Med-Lab is damaged
+One of your officiers is dead (you choose) - remove the token and crew dossier
+
+Alternate Game play - Cooperative, and Alliances:
+This game can be played cooperatively. All ships belong to the same fleet and work together to complete their mission. The cooperative goal of the game is to achieve all the goals of each players mission card and get everyone to escape at the same time no one is left behind. But hostile ships lurk so beware. 
+Cooperative
+Setup a standard game and then make the following changes:
+Place an equal number hostile ship tokens anywhere on the inner most yellow orbit as there are players
+Everytime an event card adds more hostile ships, double the number and place them as normal
+
+
+Alliances
+In life, alliances are naturally occurring and generally increase survival potential. We recommend you discuss whether alliances are even allowed before starting the game as it has a dramatic effect on the game play. Agreeing to the standard setup with a 2 vs 2, or 3 vs 3 has been the most successful and fun in our experience. This arrangement follows all of the Cooperative game play rules above for each team. 
+
+We encourage you to arrange this however you prefer BUT remember the most important and unbreakable rule for a game - Have fun playing!
+
+
+END-OF-GAME: 
+The end and Winning the game: It’s all about the points. The game ends on the turn that half the ships have escaped the gravity well or all ships are wrecked. You get points for:
+Escaping
+First to have escaped: 50 points (equal points given if one or more players escape on the same turn)
+Escaped: 25 points
+	
+Completing your mission (each mission) tier
+First tier: 25 initial points
+Second tier: 10 additional points
+
+Each ship section
+Functioning: 5 points 
+Fully powered: 5 additional points
+Upgrade installed: 5 additional points
+Upgrade fully powered (only applies if power is required): 5 additional points
+
+Each active Crew
+Basic crew: 5 points
+Captain and Officers: 10 points
+
+And 1 point for each of the following:
+	Hull
+	Shield
+	Stored/Charging power
+	
+Wrecked
+	There are no additional points for being wrecked
+
+Since turns are simultaneous it is possible for all players to escape at the end of the game. Ties are broken by the highest number of mission points, then by the highest ship points in the following order: number of upgrades installed, number of fully powered sections, number of crew, and finally total power. Should the game still be a tie after comparing scores for each of the above - we recommend flipping a coin, armwrestling, or agree to “share” the win, but we know who won don’t we. And you must always rematch and play again because you’ll get better at it and, hey, luck is bound to come around.
+
+
+Developer Notes 
+Sequence: [Having all players move simultaneously is key to making this sequence make sense. Each step is done by each player at the same time. There are many reasons but here are two just to highlight my intent: 1) player one decided to revive a crew member, but player two is not reviving anyone and is instead planning on scanning player one and so must wait for player one to finish their revive and decide if they will maneuver before going to step “C”. 2) Player one has decided to attack player two, and player two decides to maneuver after the scanning step, player one has the opportunity to perform a maneuver as well and give chase.]
+Event - On every 4th turn (half a cycle), draw one Event card and do as it instructs. [Having an event every time the board rotates added too much randomity, overwhelming the play. Every 4th turn might be too infrequent, more play-testing is needed on this point.]
+Move and perform your Actions (some upgrades/abilities provide extra actions)
+Moving your crew, Maneuver, and Assemble actions can be performed at any time during this step. The remaining actions are done in the following sequence: [I decided that moving your crew around the ship or moving your ship around the board should not have to occur at a specific moment in this sequence, giving it a more fluid feel. The assemble action is in this category as well since you might acquire the resources or discover the need or simply run out of things you can do, so this can happen at any time as well before or after the A-F steps below.]
+Generate & Repair [I put this first because it is the most critical thing to be done of the ship, and really it is where the resources for all the subsequent actions derive. Also, since damage doesn’t occur before this, you won’t be concern about saving actions for repair in case you are damaged]
+Revive [It makes sense that the next highest priority would be to revive crew members if you are able or inclined.]
+Scan [This is the next logical action, since you might have some hostile or wreckage nearby from which you will need to decide the next actions. Keep in mind that maneuver can be performed before and after this. Also note that some abilities allow for an immediate and free Acquire action to take place when scanning which accelerates how quickly an upgrade could be integrated.]
+Attack & Launch & Retaliate (See Combat for more details) [This was a tough one to decide on just where exactly it belonged. But ultimately I want it to happen after scanning, and before someone tries to integrate an upgrade.]
+Integrate [This is before the acquire step so that someone is not able (without some additional ability) to integrate an upgrade on the same turn that it is acquired.]
+Acquire [And that left Acquire to be the last action.]
+Auto-generate - Shields and Life support and anything else…[This is key to do after changes have been made to the ship, but before the environment is taken into account. If the environment went before this step, the changes made to the ship to attempt a defense against the environment could be undone before they had an effect. While the outcome might be similar, or even the same, it would be demoralizing to reverse these steps.]
+Environment Damage
+Environment Movement
+Move Hostile ships randomly 1 space toward the closest player ship - check if hostile can attack or launch a torp
+Move each ring 3 of its own spaces forward (use a line on an adjacent ring)
+On every 4th turn, each object descends one ring, removed if it enters the center
+Orbiting/Falling (if speed less than requirement, fall inward one and gain one speed)
+Escape

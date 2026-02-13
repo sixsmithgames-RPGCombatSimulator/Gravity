@@ -1,0 +1,35 @@
+node_modules
+**/node_modules
+
+.dist
+**/dist
+
+build
+**/build
+
+coverage
+
+.git
+
+*.log
+
+.env
+**/.env
+
+.vscode
+.idea
+
+.DS_Store
+
+*.tsbuildinfo
+
+# Non-app assets (keep containers lean)
+Action Cards
+Crew Cards
+Event Cards
+Mission Cards
+Upgrade Cards
+Deck of Acquisition
+Assets
+Games - Board Game - Gravity
+docs

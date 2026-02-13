@@ -1,0 +1,20 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/core/package.json packages/core/package.json
+COPY packages/web/package.json packages/web/package.json
+COPY packages/server/package.json packages/server/package.json
+
+RUN npm ci
+
+COPY packages/core packages/core
+COPY packages/web packages/web
+
+RUN npm run build -w @gravity/core
+RUN npm run build -w @gravity/web
+
+EXPOSE 5173
+
+CMD ["npm", "run", "preview", "-w", "@gravity/web", "--", "--host", "0.0.0.0", "--port", "5173"]

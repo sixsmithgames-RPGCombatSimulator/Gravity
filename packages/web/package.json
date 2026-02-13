@@ -1,0 +1,40 @@
+{
+  "name": "@gravity/web",
+  "version": "0.1.0",
+  "description": "Gravity web client - React TypeScript application",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest --passWithNoTests",
+    "lint": "eslint . --ext ts,tsx",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@gravity/core": "*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.0",
+    "socket.io-client": "^4.6.0",
+    "zod": "^3.22.0",
+    "framer-motion": "^10.16.0",
+    "@radix-ui/react-dialog": "^1.0.0",
+    "@radix-ui/react-tooltip": "^1.0.0",
+    "@radix-ui/react-select": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "@testing-library/react": "^14.1.0",
+    "@testing-library/user-event": "^14.5.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "eslint": "^8.55.0"
+  }
+}
