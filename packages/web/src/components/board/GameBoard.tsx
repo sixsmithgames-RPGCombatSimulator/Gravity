@@ -39,6 +39,7 @@ import { getUpgradePowerStatus } from '../../utils/upgradePower';
 
 const BOARD_SIZE = 600;
 const CENTER = BOARD_SIZE / 2;
+const VIEWBOX_PADDING = 28;
 const NUM_RINGS = 8;
 const MIN_RADIUS = 40;
 const MAX_RADIUS = CENTER - 8;
@@ -1171,53 +1172,61 @@ export function GameBoard() {
             const hazardHullPenalty = hazardDamage.hull;
             const hazardActive = hazardLifeSupportPenalty > 0 || hazardHullPenalty > 0;
 
+            const headingX = CENTER - coords.x;
+            const headingY = CENTER - coords.y;
+            const headingDeg = (Math.atan2(headingY, headingX) * 180) / Math.PI;
+            // Ship art is authored pointing up (-Y). Convert to desired heading.
+            const shipRotationDeg = headingDeg + 90;
+
             return (
               <g key={playerId} className="cursor-pointer">
-                {/* Engine glow */}
-                <ellipse
-                  cx={coords.x}
-                  cy={coords.y + 11}
-                  rx={4}
-                  ry={6}
-                  fill={isCurrentPlayer ? '#60a5fa' : '#fb923c'}
-                  fillOpacity={0.5}
-                >
-                  <animate attributeName="ry" values="5;8;5" dur="1.2s" repeatCount="indefinite" />
-                  <animate attributeName="fill-opacity" values="0.4;0.7;0.4" dur="1.2s" repeatCount="indefinite" />
-                </ellipse>
-                {/* Ship body – detailed silhouette */}
-                <polygon
-                  points={`${coords.x},${coords.y - 16} ${coords.x + 4},${coords.y - 8} ${coords.x + 11},${coords.y + 2} ${coords.x + 8},${coords.y + 6} ${coords.x + 5},${coords.y + 10} ${coords.x - 5},${coords.y + 10} ${coords.x - 8},${coords.y + 6} ${coords.x - 11},${coords.y + 2} ${coords.x - 4},${coords.y - 8}`}
-                  fill={color}
-                  fillOpacity={0.85}
-                  stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'}
-                  strokeWidth={1.5}
-                  strokeLinejoin="round"
-                />
-                {/* Cockpit canopy */}
-                <ellipse
-                  cx={coords.x}
-                  cy={coords.y - 6}
-                  rx={3}
-                  ry={4}
-                  fill={isCurrentPlayer ? '#93c5fd' : '#fdba74'}
-                  fillOpacity={0.6}
-                />
-                {/* Wing accents */}
-                <line x1={coords.x - 4} y1={coords.y - 2} x2={coords.x - 10} y2={coords.y + 3} stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'} strokeWidth={0.8} opacity={0.5} />
-                <line x1={coords.x + 4} y1={coords.y - 2} x2={coords.x + 10} y2={coords.y + 3} stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'} strokeWidth={0.8} opacity={0.5} />
-                {/* Player indicator beacon */}
-                {isCurrentPlayer && (
-                  <circle
-                    cx={coords.x}
-                    cy={coords.y - 20}
-                    r={3}
-                    fill="#4ade80"
+                <g transform={`translate(${coords.x} ${coords.y}) rotate(${shipRotationDeg})`}>
+                  {/* Engine glow */}
+                  <ellipse
+                    cx={0}
+                    cy={11}
+                    rx={4}
+                    ry={6}
+                    fill={isCurrentPlayer ? '#60a5fa' : '#fb923c'}
+                    fillOpacity={0.5}
                   >
-                    <animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite" />
-                    <animate attributeName="fill-opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
-                  </circle>
-                )}
+                    <animate attributeName="ry" values="5;8;5" dur="1.2s" repeatCount="indefinite" />
+                    <animate attributeName="fill-opacity" values="0.4;0.7;0.4" dur="1.2s" repeatCount="indefinite" />
+                  </ellipse>
+                  {/* Ship body – detailed silhouette */}
+                  <polygon
+                    points={`0,-16 4,-8 11,2 8,6 5,10 -5,10 -8,6 -11,2 -4,-8`}
+                    fill={color}
+                    fillOpacity={0.85}
+                    stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'}
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                  />
+                  {/* Cockpit canopy */}
+                  <ellipse
+                    cx={0}
+                    cy={-6}
+                    rx={3}
+                    ry={4}
+                    fill={isCurrentPlayer ? '#93c5fd' : '#fdba74'}
+                    fillOpacity={0.6}
+                  />
+                  {/* Wing accents */}
+                  <line x1={-4} y1={-2} x2={-10} y2={3} stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'} strokeWidth={0.8} opacity={0.5} />
+                  <line x1={4} y1={-2} x2={10} y2={3} stroke={isCurrentPlayer ? '#93c5fd' : '#fdba74'} strokeWidth={0.8} opacity={0.5} />
+                  {/* Player indicator beacon */}
+                  {isCurrentPlayer && (
+                    <circle
+                      cx={0}
+                      cy={-20}
+                      r={3}
+                      fill="#4ade80"
+                    >
+                      <animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="fill-opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
+                    </circle>
+                  )}
+                </g>
                 {/* Shield indicator – animated hex ring */}
                 {player.ship.shields > 0 && (
                   <g>
@@ -1394,7 +1403,7 @@ export function GameBoard() {
         }}
       >
         <svg
-          viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
+          viewBox={`${-VIEWBOX_PADDING} ${-VIEWBOX_PADDING} ${BOARD_SIZE + VIEWBOX_PADDING * 2} ${BOARD_SIZE + VIEWBOX_PADDING * 2}`}
           className="w-full h-full drop-shadow-2xl"
           preserveAspectRatio="xMidYMid meet"
           onClick={(e) => {
@@ -1466,7 +1475,7 @@ export function GameBoard() {
         <circle
           cx={CENTER}
           cy={CENTER}
-          r={CENTER}
+          r={CENTER + VIEWBOX_PADDING}
           fill="url(#voidGradient)"
           data-board-background="true"
         />
