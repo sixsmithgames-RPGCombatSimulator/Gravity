@@ -4,7 +4,53 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Gravity - A tactical space survival board game" />
-    <title>Gravity</title>
+    <title>Gravity - Space Fleet Commander</title>
+    <!-- Sixsmith Games Auth Guard -->
+    <script>
+      (function() {
+        var PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuc2l4c21pdGhnYW1lcy5jb20k';
+        var SIGN_IN_URL = 'https://sixsmithgames.com/sign-in?redirect_url=' + encodeURIComponent(window.location.href);
+        var PRICING_URL = 'https://sixsmithgames.com/pricing';
+        var DUMMY_EMAILS = ['sexsmith2005@gmail.com'];
+        var ADMIN_EMAILS = ('' || '').split(',').map(function(e){ return e.trim().toLowerCase(); }).filter(Boolean);
+
+        function showGate(message, url, btnText) {
+          document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0a0e1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;text-align:center;padding:2rem;">'
+            + '<div style="font-size:3rem;margin-bottom:1rem;">🚀</div>'
+            + '<h1 style="font-size:2rem;font-weight:800;margin-bottom:0.5rem;">Gravity</h1>'
+            + '<p style="color:#93c5fd;margin-bottom:2rem;max-width:400px;">' + message + '</p>'
+            + '<a href="' + url + '" style="background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;padding:0.875rem 2rem;border-radius:50px;text-decoration:none;font-weight:700;font-size:1rem;">' + btnText + '</a>'
+            + '<a href="https://sixsmithgames.com" style="margin-top:1rem;color:#6b7280;font-size:0.875rem;text-decoration:none;">&larr; Back to Sixsmith Games</a>'
+            + '</div>';
+        }
+
+        function isDummySubscriber(email) {
+          return DUMMY_EMAILS.indexOf((email || '').toLowerCase()) !== -1;
+        }
+        function isAdmin(email) {
+          return ADMIN_EMAILS.length > 0 && ADMIN_EMAILS.indexOf((email || '').toLowerCase()) !== -1;
+        }
+
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+        script.setAttribute('data-clerk-publishable-key', PUBLISHABLE_KEY);
+        script.onload = function() {
+          window.Clerk.load().then(function() {
+            var user = window.Clerk.user;
+            if (!user) {
+              showGate('Sign in to your Sixsmith Games account to access Gravity.', SIGN_IN_URL, 'Sign In to Play →');
+              return;
+            }
+            var email = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
+            var meta = user.publicMetadata || {};
+            var hasSub = meta.subscriptionStatus === 'active' || meta.subscriptionStatus === 'trialing';
+            if (isAdmin(email) || isDummySubscriber(email) || hasSub) { return; }
+            showGate('A Sixsmith Games subscription is required to access Gravity.', PRICING_URL, 'View Plans →');
+          });
+        };
+        document.head.appendChild(script);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
