@@ -31,6 +31,18 @@
           return ADMIN_EMAILS.length > 0 && ADMIN_EMAILS.indexOf((email || '').toLowerCase()) !== -1;
         }
 
+        var APP_SLUG = 'gravity';
+        var BUNDLE_SLUG = 'bundle';
+
+        function hasAppAccess(meta) {
+          var status = meta.subscriptionStatus;
+          if (status !== 'active' && status !== 'trialing') return false;
+          var plans = meta.subscriptionPlans;
+          if (Array.isArray(plans)) return plans.indexOf(APP_SLUG) !== -1 || plans.indexOf(BUNDLE_SLUG) !== -1;
+          var plan = meta.subscriptionPlan;
+          return plan === APP_SLUG || plan === BUNDLE_SLUG;
+        }
+
         var script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
         script.setAttribute('data-clerk-publishable-key', PUBLISHABLE_KEY);
@@ -43,9 +55,8 @@
             }
             var email = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
             var meta = user.publicMetadata || {};
-            var hasSub = meta.subscriptionStatus === 'active' || meta.subscriptionStatus === 'trialing';
-            if (isAdmin(email) || isDummySubscriber(email) || hasSub) { return; }
-            showGate('A Sixsmith Games subscription is required to access Gravity.', PRICING_URL, 'View Plans →');
+            if (isAdmin(email) || isDummySubscriber(email) || hasAppAccess(meta)) { return; }
+            showGate('A Gravity subscription is required. Subscribe individually or get the All-Access Bundle.', PRICING_URL, 'View Plans →');
           });
         };
         document.head.appendChild(script);
