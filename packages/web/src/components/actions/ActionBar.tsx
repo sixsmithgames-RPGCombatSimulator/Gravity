@@ -356,8 +356,8 @@ export function ActionBar() {
   };
 
   return (
-    <div className="px-4 py-2.5" style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
-      <div className="flex items-center gap-4">
+    <div className="px-3 py-2" style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
+      <div className="flex items-center gap-3">
         {/* Phase indicator */}
         <div className="text-xs flex items-center gap-2">
           <div className={`w-1.5 h-1.5 rounded-full ${

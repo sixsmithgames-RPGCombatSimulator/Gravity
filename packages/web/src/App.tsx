@@ -46,14 +46,14 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <Header />
 
       {/* Main content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Game board - takes most of the space */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           <GameBoard />
           <EventOverlay />
           <RosterOverlay />
@@ -63,10 +63,10 @@ function App() {
 
         {/* Ship dashboard - fixed width sidebar (playmat temporarily hidden) */}
         <aside
-          className="w-[clamp(400px,34vw,700px)] min-w-[400px] border-l border-gravity-border overflow-y-auto bg-slate-900"
+          className="w-[clamp(320px,28vw,480px)] min-w-[320px] border-l border-gravity-border overflow-y-auto bg-slate-900"
         >
           {/* Inner overlay panel to keep text readable while aligning to mat */}
-          <div className="h-full bg-slate-900/70 px-4 py-4 flex flex-col">
+          <div className="h-full bg-slate-900/70 px-3 py-3 flex flex-col">
             <ShipDashboard />
           </div>
         </aside>

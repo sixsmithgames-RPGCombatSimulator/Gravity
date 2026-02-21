@@ -10,6 +10,8 @@
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
   }
 
   /* Headings use Orbitron for sci-fi feel */
@@ -20,8 +22,9 @@
 
   body {
     @apply bg-gravity-bg text-gravity-text;
-    @apply min-h-screen;
     @apply antialiased;
+    height: 100vh;
+    overflow: hidden;
   }
 
   /* Remove default focus outlines, add custom */

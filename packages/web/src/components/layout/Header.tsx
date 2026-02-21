@@ -45,7 +45,7 @@ export function Header() {
       {/* Bottom border glow */}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
 
-      <div className="h-14 px-5 flex items-center justify-between">
+      <div className="h-12 px-4 flex items-center justify-between">
         {/* Logo and title */}
         <div className="flex items-center gap-3">
           {/* Mini gravity well icon */}
