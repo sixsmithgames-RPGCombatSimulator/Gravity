@@ -4275,8 +4275,8 @@ export function ShipDashboard() {
         }
       }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(520px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl">
+          <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(520px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl z-[101]">
             <Dialog.Title className="text-sm font-bold tracking-wide">
               CONFIRM CLEAR
             </Dialog.Title>
@@ -4357,8 +4357,8 @@ export function ShipDashboard() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-          <Dialog.Content className="fixed top-0 right-0 h-full w-[min(420px,94vw)] border-l border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-2xl overflow-y-auto">
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[100]" />
+          <Dialog.Content className="fixed top-0 right-0 h-full w-[min(420px,94vw)] border-l border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-2xl overflow-y-auto z-[101]">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm font-bold tracking-wide">UPGRADE</div>
               <Dialog.Close asChild>
@@ -7133,8 +7133,8 @@ export function ShipDashboard() {
       {/* Ship sections grid with corridor overlay */}
       <Dialog.Root open={explorerNeedsRepairKitPlacement} onOpenChange={() => {}}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(560px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl">
+          <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(560px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl z-[101]">
             <div className="text-sm font-bold tracking-wide">EXPLORER: PLACE REPAIR KIT</div>
             <div className="mt-2 text-[10px] text-gravity-muted">
               Select a damaged ship section to place your special repair kit.
@@ -7170,9 +7170,9 @@ export function ShipDashboard() {
 
       <Dialog.Root open={spacePirateNeedsStartingUpgradeChoice} onOpenChange={() => {}}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60" />
+          <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
           <Dialog.Content
-            className="fixed top-1/2 max-h-[85vh] w-[min(960px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gravity-border bg-gravity-bg p-8 text-slate-100 shadow-2xl"
+            className="fixed top-1/2 max-h-[85vh] w-[min(960px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gravity-border bg-gravity-bg p-8 text-slate-100 shadow-2xl z-[101]"
             style={{ left: 'calc((100vw - clamp(520px,45vw,920px)) / 2)' }}
           >
             <div className="text-2xl font-extrabold tracking-wide">SPACE PIRATE: CHOOSE STARTING UPGRADE</div>
@@ -7252,8 +7252,8 @@ export function ShipDashboard() {
         </div>
 
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(640px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl">
+          <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(640px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl z-[101]">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm font-bold tracking-wide">UPGRADES</div>
               <Dialog.Close asChild>
