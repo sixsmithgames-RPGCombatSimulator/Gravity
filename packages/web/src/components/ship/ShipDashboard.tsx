@@ -7172,8 +7172,7 @@ export function ShipDashboard() {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
           <Dialog.Content
-            className="fixed top-1/2 max-h-[85vh] w-[min(960px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gravity-border bg-gravity-bg p-8 text-slate-100 shadow-2xl z-[101]"
-            style={{ left: 'calc((100vw - clamp(520px,45vw,920px)) / 2)' }}
+            className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(960px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gravity-border bg-gravity-bg p-8 text-slate-100 shadow-2xl z-[101]"
           >
             <div className="text-2xl font-extrabold tracking-wide">SPACE PIRATE: CHOOSE STARTING UPGRADE</div>
             <div className="mt-4 text-[20px] leading-snug text-gravity-muted">
