@@ -63,7 +63,7 @@ function App() {
 
         {/* Ship dashboard - fixed width sidebar (playmat temporarily hidden) */}
         <aside
-          className="w-[clamp(420px,35vw,600px)] min-w-[420px] border-l border-gravity-border overflow-y-auto bg-slate-900"
+          className="w-[clamp(480px,38vw,680px)] min-w-[480px] border-l border-gravity-border overflow-y-auto bg-slate-900"
         >
           {/* Inner overlay panel to keep text readable while aligning to mat */}
           <div className="h-full bg-slate-900/70 px-3 py-3 flex flex-col">
