@@ -929,9 +929,23 @@ export function GameBoard() {
             })();
 
             const isHazard = obj.type === 'hazard';
-            const hazardRangeRadius = isHazard
-              ? Math.min(RING_SPACING * (HAZARD_CONFIG.range + 0.75), 140)
-              : null;
+            const hazardRangeRadius = (() => {
+              if (!isHazard) {
+                return null;
+              }
+
+              const ringData = game.board.rings[obj.position.ring - 1];
+              const ringRadius = Math.min(MIN_RADIUS + (obj.position.ring * RING_SPACING), MAX_RADIUS);
+              const spaces = ringData?.numSpaces ?? 0;
+
+              const tangential =
+                spaces > 0
+                  ? 2 * ringRadius * Math.sin((Math.min(HAZARD_CONFIG.range, Math.floor(spaces / 2)) * Math.PI) / spaces)
+                  : 0;
+              const radial = HAZARD_CONFIG.range * RING_SPACING;
+
+              return Math.min(Math.max(tangential, radial) + RING_SPACING * 0.35, 240);
+            })();
 
             return (
               <g
@@ -1172,6 +1186,22 @@ export function GameBoard() {
             const hazardHullPenalty = hazardDamage.hull;
             const hazardActive = hazardLifeSupportPenalty > 0 || hazardHullPenalty > 0;
 
+            const hazardContributors = hazardActive
+              ? game.board.objects
+                  .filter((obj) => obj.type === 'hazard')
+                  .map((hazard) => {
+                    const distance = BoardUtils.calculateDistance(player.ship.position, hazard.position, game.board);
+                    return {
+                      id: hazard.id,
+                      ring: hazard.position.ring,
+                      space: hazard.position.space,
+                      distance,
+                    };
+                  })
+                  .filter((entry) => entry.distance <= HAZARD_CONFIG.range)
+                  .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
+              : [];
+
             const headingX = CENTER - coords.x;
             const headingY = CENTER - coords.y;
             const headingDeg = (Math.atan2(headingY, headingX) * 180) / Math.PI;
@@ -1280,7 +1310,15 @@ export function GameBoard() {
                 )}
                 {hazardActive && (
                   <title>
-                    {`Hazard radiation: -${hazardHullPenalty} hull, -${hazardLifeSupportPenalty} life support at end of phase.`}
+                    {[
+                      `Hazard radiation: -${hazardHullPenalty} hull, -${hazardLifeSupportPenalty} life support at end of phase.`,
+                      hazardContributors.length > 0
+                        ? `\nContributors (≤${HAZARD_CONFIG.range}): ${hazardContributors.length}`
+                        : '',
+                      ...hazardContributors.map((h) => `\n- ${h.id} @ r${h.ring}s${h.space} (d=${h.distance})`),
+                    ]
+                      .filter((line) => line.trim().length > 0)
+                      .join('')}
                   </title>
                 )}
               </g>

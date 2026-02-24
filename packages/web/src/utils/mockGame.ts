@@ -142,6 +142,31 @@ function seedInitialObjects(game: GameState): GameState {
   // Key = ring index (1-based), Value = set of occupied space indices.
   const occupiedByRing = new Map<number, Set<number>>();
 
+  // Reserve the ship start positions used by startGame() so we don't seed
+  // objects onto the spaces where ships will be placed.
+  const outerRing = game.board.rings[game.board.rings.length - 1];
+  const startingPlayerCount = game.players.size;
+  if (outerRing && outerRing.numSpaces > 0 && startingPlayerCount > 0) {
+    if (!occupiedByRing.has(outerRing.index)) {
+      occupiedByRing.set(outerRing.index, new Set());
+    }
+    const occupied = occupiedByRing.get(outerRing.index)!;
+
+    const spacing = outerRing.numSpaces / startingPlayerCount;
+    const sortedPlayers = Array.from(game.players.values()).sort(
+      (a, b) => a.playerOrder - b.playerOrder,
+    );
+
+    for (let index = 0; index < sortedPlayers.length; index += 1) {
+      const space = index * spacing;
+      // startGame throws if this isn't an integer; keep the same behavior here.
+      if (!Number.isInteger(space)) {
+        continue;
+      }
+      occupied.add(space);
+    }
+  }
+
   /**
    * Place `count` objects of `type` on `ring`, avoiding already-occupied spaces.
    * Distributes objects as evenly as possible around the ring circumference.
@@ -198,13 +223,13 @@ function seedInitialObjects(game: GameState): GameState {
   addSpread('debris', 4, 2);
   addSpread('debris', 6, 2);
 
-  const playerCount = game.players.size || 2;
+  const objectPlayerCount = game.players.size || 2;
 
   // Hostile ships: (number of players) on ring 3 (12 spaces)
-  addSpread('hostile_ship', 3, playerCount);
+  addSpread('hostile_ship', 3, objectPlayerCount);
 
   // Wrecked ships: (number of players) on ring 5
-  addSpread('wrecked_ship', 5, playerCount);
+  addSpread('wrecked_ship', 5, objectPlayerCount);
 
   // Functional stations: 1 on ring 6, 1 on ring 8 for variety
   addSpread('functional_station', 6, 1);
