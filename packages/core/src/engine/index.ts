@@ -9120,6 +9120,11 @@ export function applyEnvironmentDamage(game: GameState): GameState {
     );
   }
 
+  // Skip environment damage on turn 1 to give players a chance to move from starting position
+  if (game.currentTurn === 1) {
+    return game;
+  }
+
   const damageByPlayer = computeEnvironmentDamageForActivePlayers(game);
   const players = new Map<string, PlayerState>();
 
