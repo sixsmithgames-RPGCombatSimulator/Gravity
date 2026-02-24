@@ -8715,11 +8715,6 @@ export function applyHazardDamage(game: GameState): GameState {
     );
   }
 
-  // Skip hazard damage on turn 1 to give players a chance to move from starting position
-  if (game.currentTurn === 1) {
-    return game;
-  }
-
   const updatedPlayers = new Map<string, PlayerState>();
 
   for (const player of game.players.values()) {
@@ -9123,11 +9118,6 @@ export function applyEnvironmentDamage(game: GameState): GameState {
       `Root cause: game status is "${game.status}". ` +
       'Fix: Only call applyEnvironmentDamage when game.status is "in_progress".'
     );
-  }
-
-  // Skip environment damage on turn 1 to give players a chance to move from starting position
-  if (game.currentTurn === 1) {
-    return game;
   }
 
   const damageByPlayer = computeEnvironmentDamageForActivePlayers(game);

@@ -196,7 +196,6 @@ export function ActionBar() {
     ui,
     addPlannedAction,
     removePlannedAction,
-    clearPlannedActions,
     playTurn,
     selectCrew,
     selectActionSlot,
@@ -240,7 +239,7 @@ export function ActionBar() {
   };
 
   const phaseLabel = phaseLabelMap[game.turnPhase] ?? game.turnPhase;
-  const submitLabel = isPlanning ? 'Submit Turn' : 'Advance Phase';
+  const submitLabel = 'Advance Phase';
 
   // Get assigned action for a crew member
   const getAssignedAction = (crewId: string, slot: 'primary' | 'bonus'): PlayerActionType | null => {
@@ -523,19 +522,6 @@ export function ActionBar() {
         {/* Action buttons */}
         <div className="flex flex-col gap-1 items-end">
           <div className="flex gap-2">
-            <button
-              onClick={clearPlannedActions}
-              disabled={ui.plannedActions.length === 0}
-              className="btn-secondary text-xs disabled:opacity-30"
-            >
-              <span className="flex items-center gap-1.5">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-2 14H7L5 6" />
-                </svg>
-                Clear
-              </span>
-            </button>
             <button
               onClick={handleSubmitTurn}
               disabled={

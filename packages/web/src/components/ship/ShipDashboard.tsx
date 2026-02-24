@@ -3052,19 +3052,18 @@ export function ShipDashboard() {
     game,
     currentPlayerId,
     ui,
-    toggleRoster,
     addPlannedAction,
-    updatePlannedActionParameters,
     removePlannedAction,
     clearPlannedActions,
-    updatePlannedActionTarget,
-    selectTarget,
     selectCrew,
+    selectTarget,
     selectActionSlot,
+    updatePlannedActionParameters,
+    updatePlannedActionTarget,
     moveCrew,
     setExecutionConfirmed,
     setLastError,
-    playTurn,
+    toggleRoster,
     assignExplorerRepairKit,
     chooseSpacePirateStartingUpgrade,
   } = useGameStore();
@@ -4072,6 +4071,13 @@ export function ShipDashboard() {
     selectedStimmed &&
     !(typeof selectedStimDoctorId === 'string' && selectedStimDoctorId.length > 0 && selectedStimDoctorId !== selectedAction.crewId);
 
+  const hasDoctorOfficer = allCrew.some((c) => {
+    if ('captainType' in c) {
+      return false;
+    }
+    return (c as any)?.type === 'officer' && (c as any)?.role === 'doctor' && c.status === 'active';
+  });
+
   const selectedCrewSection =
     selectedCrew && typeof (selectedCrew as { location?: unknown }).location === 'string'
       ? ((selectedCrew as { location: string }).location as ShipSection)
@@ -4488,7 +4494,7 @@ export function ShipDashboard() {
           </div>
         )}
 
-        {selectedStimNeedsDoctor && (
+        {hasDoctorOfficer && selectedStimNeedsDoctor && (
           <div className="text-[10px] text-center text-fuchsia-300 mb-1">
             Select a Doctor to apply stim pack
           </div>
@@ -5719,7 +5725,7 @@ export function ShipDashboard() {
               (selectedCrew as any)?.type === 'officer' &&
               (selectedCrew as any)?.role === 'doctor';
             
-            if (!isDoctor) {
+            if (!hasDoctorOfficer || !isDoctor) {
               return null;
             }
 

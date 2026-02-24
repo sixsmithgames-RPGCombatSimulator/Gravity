@@ -1018,14 +1018,6 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
           executionConfirmed: false,
         };
       } else if (game.turnPhase === 'action_execution') {
-        if (!ui.executionConfirmed) {
-          throw new Error(
-            'Cannot advance out of Action Execution because actions are not confirmed complete. ' +
-            'Root cause: ui.executionConfirmed is false. ' +
-            'Fix: Click "All Actions Complete" in the ship dashboard before advancing.'
-          );
-        }
-
         workingGame = processTurn(game, actionsByPlayer);
         nextUI = {
           ...ui,
