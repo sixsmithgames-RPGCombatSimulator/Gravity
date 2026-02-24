@@ -8715,6 +8715,11 @@ export function applyHazardDamage(game: GameState): GameState {
     );
   }
 
+  // Skip hazard damage on turn 1 to give players a chance to move from starting position
+  if (game.currentTurn === 1) {
+    return game;
+  }
+
   const updatedPlayers = new Map<string, PlayerState>();
 
   for (const player of game.players.values()) {

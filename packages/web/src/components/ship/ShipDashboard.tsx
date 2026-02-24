@@ -5537,23 +5537,6 @@ export function ShipDashboard() {
               })}
             </div>
           )}
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] text-gravity-muted">Confirm all execution choices to advance</div>
-            <button
-              className="btn-primary text-[10px] px-3 py-1 disabled:opacity-50"
-              onClick={() => {
-                if (!allRevivesTargeted || !allRepairsTargeted || !allStimsConfigured || !isManeuverCountValid || !allManeuversConfigured || !allBoardTargetsSelected || !allAssemblesConfigured || !allIntegratesConfigured || !allLaunchesConfigured || !allRoutesConfigured) {
-                  return;
-                }
-                setExecutionConfirmed(true);
-                playTurn();
-              }}
-              disabled={!allRevivesTargeted || !allRepairsTargeted || !allStimsConfigured || !isManeuverCountValid || !allManeuversConfigured || !allBoardTargetsSelected || !allAssemblesConfigured || !allIntegratesConfigured || !allLaunchesConfigured || !allRoutesConfigured}
-              type="button"
-            >
-              All Actions Complete
-            </button>
-          </div>
           {(!allRevivesTargeted || !allRepairsTargeted || !allStimsConfigured || !isManeuverCountValid || !allManeuversConfigured || !allBoardTargetsSelected || !allAssemblesConfigured || !allIntegratesConfigured || !allLaunchesConfigured || !allRoutesConfigured) && (
             <div className="mt-1 text-[10px] text-green-300 text-center">
               {!isManeuverCountValid
@@ -5730,38 +5713,48 @@ export function ShipDashboard() {
             </div>
           )}
 
-          {selectedAction && (
-            <div className="mt-2 rounded border border-fuchsia-400/30 bg-fuchsia-950/10 px-2 py-1 text-[10px] text-fuchsia-200">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold">Stim Pack</div>
-                <button
-                  type="button"
-                  className={`px-2 py-1 rounded text-[10px] ${
-                    selectedStimmed
-                      ? 'bg-fuchsia-700/60 text-fuchsia-100 border border-fuchsia-400/60'
-                      : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
-                  }`}
-                  onClick={() => {
-                    setExecutionConfirmed(false);
-                    if (selectedStimmed) {
+          {selectedAction && (() => {
+            const isDoctor = selectedCrew && 
+              !('captainType' in selectedCrew) &&
+              (selectedCrew as any)?.type === 'officer' &&
+              (selectedCrew as any)?.role === 'doctor';
+            
+            if (!isDoctor) {
+              return null;
+            }
+
+            return (
+              <div className="mt-2 rounded border border-fuchsia-400/30 bg-fuchsia-950/10 px-2 py-1 text-[10px] text-fuchsia-200">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold">Stim Pack</div>
+                  <button
+                    type="button"
+                    className={`px-2 py-1 rounded text-[10px] ${
+                      selectedStimmed
+                        ? 'bg-fuchsia-700/60 text-fuchsia-100 border border-fuchsia-400/60'
+                        : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                    }`}
+                    onClick={() => {
+                      setExecutionConfirmed(false);
+                      if (selectedStimmed) {
+                        updatePlannedActionParameters(selectedCrew.id, {
+                          stimmed: undefined,
+                          stimDoctorId: undefined,
+                          secondaryTargetObjectId: undefined,
+                          secondaryLaunchType: undefined,
+                          secondaryUpgradeId: undefined,
+                        }, ui.selectedActionSlot);
+                        return;
+                      }
                       updatePlannedActionParameters(selectedCrew.id, {
-                        stimmed: undefined,
+                        stimmed: true,
                         stimDoctorId: undefined,
-                        secondaryTargetObjectId: undefined,
-                        secondaryLaunchType: undefined,
-                        secondaryUpgradeId: undefined,
                       }, ui.selectedActionSlot);
-                      return;
-                    }
-                    updatePlannedActionParameters(selectedCrew.id, {
-                      stimmed: true,
-                      stimDoctorId: undefined,
-                    }, ui.selectedActionSlot);
-                  }}
-                >
-                  {selectedStimmed ? 'Enabled' : 'Disabled'}
-                </button>
-              </div>
+                    }}
+                  >
+                    {selectedStimmed ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
 
               {selectedStimmed && (
                 <div className="mt-1 flex items-center justify-between gap-2">
@@ -5980,7 +5973,8 @@ export function ShipDashboard() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {selectedAction &&
             (selectedAction.type === 'revive' ||

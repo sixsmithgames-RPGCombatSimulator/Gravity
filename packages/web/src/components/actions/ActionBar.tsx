@@ -200,6 +200,7 @@ export function ActionBar() {
     playTurn,
     selectCrew,
     selectActionSlot,
+    setExecutionConfirmed,
   } = useGameStore();
 
   const player = currentPlayerId ? game?.players.get(currentPlayerId) : null;
@@ -336,6 +337,7 @@ export function ActionBar() {
   const shouldShowBonusActionControls = canPlanBonusAction || !!plannedBonusAction;
 
   const [bonusCrewId, setBonusCrewId] = useState<string>(plannedBonusCrewId ?? '');
+  const [showValidationMessage, setShowValidationMessage] = useState(false);
 
   useEffect(() => {
     if (plannedBonusCrewId) {
@@ -350,8 +352,89 @@ export function ActionBar() {
     setBonusCrewId(assignableCrew[0].id);
   }, [assignableCrew, bonusCrewId]);
 
+  // Validation for execution phase
+  const reviveActions = ui.plannedActions.filter((a) => a.type === 'revive');
+  const allRevivesTargeted = reviveActions.every((a) => {
+    const targetCrewId = (a.parameters as any)?.targetCrewId;
+    return typeof targetCrewId === 'string' && targetCrewId.length > 0;
+  });
+
+  const repairActions = ui.plannedActions.filter((a) => a.type === 'repair');
+  const allRepairsTargeted = repairActions.every(
+    (a) => !!a.target?.section && !!(a.parameters as any)?.repairType,
+  );
+
+  const stimActions = ui.plannedActions.filter((a) => (a.parameters as any)?.stimmed === true);
+  const allStimsConfigured = stimActions.every((a) => {
+    const stimDoctorId = (a.parameters as any)?.stimDoctorId;
+    return typeof stimDoctorId === 'string' && stimDoctorId.length > 0 && stimDoctorId !== a.crewId;
+  });
+
+  const maneuverActions = ui.plannedActions.filter((a) => a.type === 'maneuver');
+  const isManeuverCountValid = maneuverActions.length <= 1;
+
+  const allManeuversConfigured = maneuverActions.every((a) => {
+    const params = a.parameters as any;
+    return params?.direction && typeof params?.powerSpent === 'number';
+  });
+
+  const boardTargetActions = ui.plannedActions.filter(
+    (a) => a.type === 'scan' || a.type === 'acquire' || a.type === 'attack',
+  );
+  const allBoardTargetsSelected = boardTargetActions.every((a) => !!a.target?.objectId);
+
+  const assembleActions = ui.plannedActions.filter((a) => a.type === 'assemble');
+  const allAssemblesConfigured = assembleActions.every((a) => !!(a.parameters as any)?.itemType);
+
+  const integrateActions = ui.plannedActions.filter((a) => a.type === 'integrate');
+  const allIntegratesConfigured = integrateActions.every((a) => !!(a.parameters as any)?.upgradeId);
+
+  const launchActions = ui.plannedActions.filter((a) => a.type === 'launch');
+  const allLaunchesConfigured = launchActions.every((a) => !!(a.parameters as any)?.launchType);
+
+  const routeActions = ui.plannedActions.filter((a) => a.type === 'route');
+  const allRoutesConfigured = routeActions.every((a) => {
+    const params = a.parameters as any;
+    return params?.sourceSection && params?.targetSection && typeof params?.amount === 'number';
+  });
+
+  const allExecutionChoicesComplete = 
+    allRevivesTargeted && 
+    allRepairsTargeted && 
+    allStimsConfigured && 
+    isManeuverCountValid && 
+    allManeuversConfigured && 
+    allBoardTargetsSelected && 
+    allAssemblesConfigured && 
+    allIntegratesConfigured && 
+    allLaunchesConfigured && 
+    allRoutesConfigured;
+
+  const getValidationMessage = (): string | null => {
+    if (!isExecution) return null;
+    if (!isManeuverCountValid) return 'Only one Maneuver action allowed per turn';
+    if (!allRevivesTargeted) return 'Select revive target';
+    if (!allRepairsTargeted) return 'Configure repair actions';
+    if (!allStimsConfigured) return 'Assign Doctor for stim packs';
+    if (!allManeuversConfigured) return 'Configure maneuver direction/power';
+    if (!allBoardTargetsSelected) return 'Select targets for scan/acquire/attack';
+    if (!allAssemblesConfigured) return 'Select item type for assemble';
+    if (!allIntegratesConfigured) return 'Select upgrade for integrate';
+    if (!allLaunchesConfigured) return 'Select launch type';
+    if (!allRoutesConfigured) return 'Configure power routing';
+    return null;
+  };
+
   // Handle submit turn
   const handleSubmitTurn = () => {
+    if (isExecution && !allExecutionChoicesComplete) {
+      setShowValidationMessage(true);
+      setTimeout(() => setShowValidationMessage(false), 3000);
+      return;
+    }
+    if (isExecution && allExecutionChoicesComplete) {
+      setExecutionConfirmed(true);
+    }
     playTurn();
   };
 
@@ -438,36 +521,42 @@ export function ActionBar() {
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={clearPlannedActions}
-            disabled={ui.plannedActions.length === 0}
-            className="btn-secondary text-xs disabled:opacity-30"
-          >
-            <span className="flex items-center gap-1.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-2 14H7L5 6" />
-              </svg>
-              Clear
-            </span>
-          </button>
-          <button
-            onClick={handleSubmitTurn}
-            disabled={
-              game.status !== 'in_progress' ||
-              (isPlanning && !allActionsAssigned) ||
-              (isExecution && !ui.executionConfirmed)
-            }
-            className="btn-primary text-xs disabled:opacity-30"
-          >
-            <span className="flex items-center gap-1.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-              {submitLabel}
-            </span>
-          </button>
+        <div className="flex flex-col gap-1 items-end">
+          <div className="flex gap-2">
+            <button
+              onClick={clearPlannedActions}
+              disabled={ui.plannedActions.length === 0}
+              className="btn-secondary text-xs disabled:opacity-30"
+            >
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-2 14H7L5 6" />
+                </svg>
+                Clear
+              </span>
+            </button>
+            <button
+              onClick={handleSubmitTurn}
+              disabled={
+                game.status !== 'in_progress' ||
+                (isPlanning && !allActionsAssigned)
+              }
+              className="btn-primary text-xs disabled:opacity-30"
+            >
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                {submitLabel}
+              </span>
+            </button>
+          </div>
+          {showValidationMessage && getValidationMessage() && (
+            <div className="text-[10px] text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/30">
+              {getValidationMessage()}
+            </div>
+          )}
         </div>
       </div>
     </div>
