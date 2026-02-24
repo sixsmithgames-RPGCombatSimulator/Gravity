@@ -814,12 +814,25 @@ export function GameBoard() {
     });
   }, [game?.board?.rings, ringRotationAngles]);
 
+  const hazardOverlaySourceIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (hoveredObjectId) {
+      ids.add(hoveredObjectId);
+    }
+    for (const id of pinnedObjectIds) {
+      ids.add(id);
+    }
+    return ids;
+  }, [hoveredObjectId, pinnedObjectIds]);
+
   const hazardAffectedSpaces = useMemo(() => {
     if (!game?.board?.rings || !game?.board?.objects) {
       return [];
     }
 
-    const hazards = game.board.objects.filter((obj) => obj.type === 'hazard');
+    const hazards = game.board.objects.filter(
+      (obj) => obj.type === 'hazard' && hazardOverlaySourceIds.has(obj.id),
+    );
     if (hazards.length === 0) {
       return [];
     }
@@ -827,26 +840,23 @@ export function GameBoard() {
     const positionsByRing = new Map<number, Map<string, { pos: ShipPosition; count: number }>>();
 
     for (const hazard of hazards) {
-      for (const ring of game.board.rings) {
-        for (let space = 0; space < ring.numSpaces; space += 1) {
-          const pos: ShipPosition = { ring: ring.index, space };
-          const distance = BoardUtils.calculateDistance(hazard.position, pos, game.board);
-          if (distance > HAZARD_CONFIG.range) {
-            continue;
-          }
+      const positions = BoardUtils.getPositionsWithinRange(hazard.position, HAZARD_CONFIG.range, game.board);
+      for (const pos of positions) {
+        if (pos.ring === hazard.position.ring && pos.space === hazard.position.space) {
+          continue;
+        }
 
-          if (!positionsByRing.has(pos.ring)) {
-            positionsByRing.set(pos.ring, new Map());
-          }
+        if (!positionsByRing.has(pos.ring)) {
+          positionsByRing.set(pos.ring, new Map());
+        }
 
-          const key = `${pos.ring}:${pos.space}`;
-          const ringMap = positionsByRing.get(pos.ring)!;
-          const existing = ringMap.get(key);
-          if (existing) {
-            existing.count += 1;
-          } else {
-            ringMap.set(key, { pos, count: 1 });
-          }
+        const key = `${pos.ring}:${pos.space}`;
+        const ringMap = positionsByRing.get(pos.ring)!;
+        const existing = ringMap.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          ringMap.set(key, { pos, count: 1 });
         }
       }
     }
@@ -873,7 +883,7 @@ export function GameBoard() {
                 key={`hazard-affected-${pos.ring}-${pos.space}`}
                 cx={coords.x}
                 cy={coords.y}
-                r={7}
+                r={5}
                 fill={`rgba(240,171,252,${alpha})`}
                 stroke={`rgba(240,171,252,${strokeAlpha})`}
                 strokeWidth={1}
@@ -885,7 +895,7 @@ export function GameBoard() {
     }
 
     return elements;
-  }, [game?.board, ringRotationAngles]);
+  }, [game?.board, hazardOverlaySourceIds, ringRotationAngles]);
 
   // Memoize object rendering with rotation transforms
   const objects = useMemo(() => {

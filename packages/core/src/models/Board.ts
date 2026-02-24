@@ -180,6 +180,100 @@ export interface Board {
  * Purpose: Board calculations and validations
  */
 export class BoardUtils {
+  private static getAdjacentPositions(pos: ShipPosition, board: Board): ShipPosition[] {
+    const ringDef = board.rings[pos.ring - 1];
+    if (!ringDef || ringDef.numSpaces <= 0) {
+      return [];
+    }
+
+    const nextCandidates: ShipPosition[] = [];
+
+    nextCandidates.push({
+      ring: pos.ring,
+      space: (pos.space + 1) % ringDef.numSpaces,
+    });
+
+    nextCandidates.push({
+      ring: pos.ring,
+      space: (pos.space - 1 + ringDef.numSpaces) % ringDef.numSpaces,
+    });
+
+    if (pos.ring > 1) {
+      const inwardRing = board.rings[pos.ring - 2];
+      if (inwardRing && inwardRing.numSpaces > 0) {
+        const candidates = this.getAdjacentSpacesAcrossRings({
+          space: pos.space,
+          fromSpaces: ringDef.numSpaces,
+          toSpaces: inwardRing.numSpaces,
+        });
+        for (const candidate of candidates) {
+          nextCandidates.push({ ring: pos.ring - 1, space: candidate });
+        }
+      }
+    }
+
+    if (pos.ring < board.rings.length) {
+      const outwardRing = board.rings[pos.ring];
+      if (outwardRing && outwardRing.numSpaces > 0) {
+        const candidates = this.getAdjacentSpacesAcrossRings({
+          space: pos.space,
+          fromSpaces: ringDef.numSpaces,
+          toSpaces: outwardRing.numSpaces,
+        });
+        for (const candidate of candidates) {
+          nextCandidates.push({ ring: pos.ring + 1, space: candidate });
+        }
+      }
+    }
+
+    const unique = new Map<string, ShipPosition>();
+    for (const candidate of nextCandidates) {
+      unique.set(`${candidate.ring}:${candidate.space}`, candidate);
+    }
+    return Array.from(unique.values());
+  }
+
+  static getPositionsWithinRange(origin: ShipPosition, range: number, board: Board): ShipPosition[] {
+    if (!Number.isFinite(range) || range < 0) {
+      return [];
+    }
+
+    const maxRange = Math.floor(range);
+    const encode = (pos: ShipPosition): string => `${pos.ring}:${pos.space}`;
+
+    const visited = new Set<string>();
+    const queue: Array<{ pos: ShipPosition; dist: number }> = [];
+    const result: ShipPosition[] = [];
+
+    queue.push({ pos: origin, dist: 0 });
+    visited.add(encode(origin));
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        break;
+      }
+
+      result.push(current.pos);
+
+      if (current.dist >= maxRange) {
+        continue;
+      }
+
+      const neighbors = this.getAdjacentPositions(current.pos, board);
+      for (const next of neighbors) {
+        const key = encode(next);
+        if (visited.has(key)) {
+          continue;
+        }
+        visited.add(key);
+        queue.push({ pos: next, dist: current.dist + 1 });
+      }
+    }
+
+    return result;
+  }
+
   private static getAdjacentSpacesAcrossRings(params: {
     space: number;
     fromSpaces: number;
@@ -288,45 +382,7 @@ export class BoardUtils {
         continue;
       }
 
-      const nextCandidates: ShipPosition[] = [];
-
-      nextCandidates.push({
-        ring: current.pos.ring,
-        space: (current.pos.space + 1) % ringDef.numSpaces,
-      });
-
-      nextCandidates.push({
-        ring: current.pos.ring,
-        space: (current.pos.space - 1 + ringDef.numSpaces) % ringDef.numSpaces,
-      });
-
-      if (current.pos.ring > 1) {
-        const inwardRing = board.rings[current.pos.ring - 2];
-        if (inwardRing && inwardRing.numSpaces > 0) {
-          const candidates = this.getAdjacentSpacesAcrossRings({
-            space: current.pos.space,
-            fromSpaces: ringDef.numSpaces,
-            toSpaces: inwardRing.numSpaces,
-          });
-          for (const candidate of candidates) {
-            nextCandidates.push({ ring: current.pos.ring - 1, space: candidate });
-          }
-        }
-      }
-
-      if (current.pos.ring < board.rings.length) {
-        const outwardRing = board.rings[current.pos.ring];
-        if (outwardRing && outwardRing.numSpaces > 0) {
-          const candidates = this.getAdjacentSpacesAcrossRings({
-            space: current.pos.space,
-            fromSpaces: ringDef.numSpaces,
-            toSpaces: outwardRing.numSpaces,
-          });
-          for (const candidate of candidates) {
-            nextCandidates.push({ ring: current.pos.ring + 1, space: candidate });
-          }
-        }
-      }
+      const nextCandidates = this.getAdjacentPositions(current.pos, board);
 
       for (const next of nextCandidates) {
         const key = encode(next);
