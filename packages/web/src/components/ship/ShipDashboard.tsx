@@ -3259,13 +3259,16 @@ export function ShipDashboard() {
     }
 
     const hazardObjects = boardState.objects.filter((obj) => obj.type === 'hazard');
+    const inRangePositions = BoardUtils.getPositionsWithinRange(ship.position, HAZARD_CONFIG.range, boardState);
+    const encode = (pos: { ring: number; space: number }): string => `${pos.ring}:${pos.space}`;
+    const inRangeKeys = new Set(inRangePositions.map(encode));
     const contributors: HazardContributor[] = [];
     let totalHull = 0;
     let totalLifeSupport = 0;
 
     for (const hazard of hazardObjects) {
-      const distance = BoardUtils.calculateDistance(ship.position, hazard.position, boardState);
-      if (distance <= HAZARD_CONFIG.range) {
+      if (inRangeKeys.has(encode(hazard.position))) {
+        const distance = BoardUtils.calculateDistance(ship.position, hazard.position, boardState);
         contributors.push({ id: hazard.id, ring: hazard.position.ring, space: hazard.position.space, distance });
         totalHull += HAZARD_CONFIG.damage;
         totalLifeSupport += HAZARD_CONFIG.lifeSupportReduction;

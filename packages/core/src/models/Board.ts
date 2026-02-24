@@ -248,11 +248,11 @@ export class BoardUtils {
     queue.push({ pos: origin, dist: 0 });
     visited.add(encode(origin));
 
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
+    let queueIndex = 0;
+
+    while (queueIndex < queue.length) {
+      const current = queue[queueIndex];
+      queueIndex += 1;
 
       result.push(current.pos);
 
@@ -366,11 +366,11 @@ export class BoardUtils {
     queue.push({ pos: pos1, dist: 0 });
     visited.add(encode(pos1));
 
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
+    let queueIndex = 0;
+
+    while (queueIndex < queue.length) {
+      const current = queue[queueIndex];
+      queueIndex += 1;
 
       const currentKey = encode(current.pos);
       if (currentKey === targetKey) {

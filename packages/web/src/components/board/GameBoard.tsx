@@ -91,6 +91,21 @@ function positionToCoords(position: ShipPosition, board: Board): { x: number; y:
   };
 }
 
+function polarToCartesian(cx: number, cy: number, r: number, angleRad: number): { x: number; y: number } {
+  return {
+    x: cx + Math.cos(angleRad) * r,
+    y: cy + Math.sin(angleRad) * r,
+  };
+}
+
+function arcPath(cx: number, cy: number, r: number, startAngleRad: number, endAngleRad: number): string {
+  const start = polarToCartesian(cx, cy, r, startAngleRad);
+  const end = polarToCartesian(cx, cy, r, endAngleRad);
+  const delta = ((endAngleRad - startAngleRad) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  const largeArcFlag = delta > Math.PI ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+}
+
 /**
  * Get ring color based on zone
  */
@@ -838,8 +853,14 @@ export function GameBoard() {
     }
 
     const positionsByRing = new Map<number, Map<string, { pos: ShipPosition; count: number }>>();
+    const hazardsByRing = new Map<number, AnySpaceObject[]>();
 
     for (const hazard of hazards) {
+      if (!hazardsByRing.has(hazard.position.ring)) {
+        hazardsByRing.set(hazard.position.ring, []);
+      }
+      hazardsByRing.get(hazard.position.ring)!.push(hazard);
+
       const positions = BoardUtils.getPositionsWithinRange(hazard.position, HAZARD_CONFIG.range, game.board);
       for (const pos of positions) {
         if (pos.ring === hazard.position.ring && pos.space === hazard.position.space) {
@@ -863,9 +884,65 @@ export function GameBoard() {
 
     const elements: JSX.Element[] = [];
 
+    const highlightColor = 'rgba(240,171,252,1)';
+    const auraRadius = Math.max(32, RING_SPACING * HAZARD_CONFIG.range * 1.1);
+
+    for (const [ringIndex, ringHazards] of hazardsByRing.entries()) {
+      const rotationAngle = ringRotationAngles[ringIndex - 1] ?? 0;
+      elements.push(
+        <g
+          key={`hazard-aura-${ringIndex}`}
+          transform={`rotate(${rotationAngle} ${CENTER} ${CENTER})`}
+          pointerEvents="none"
+        >
+          {ringHazards.map((hazard) => {
+            const coords = positionToCoords(hazard.position, game.board);
+            return (
+              <g key={`hazard-aura-${hazard.id}`}>
+                <circle
+                  cx={coords.x}
+                  cy={coords.y}
+                  r={auraRadius}
+                  fill="none"
+                  stroke={highlightColor}
+                  strokeWidth={2}
+                  strokeOpacity={0.22}
+                  strokeDasharray="10 10"
+                  opacity={0.9}
+                >
+                  <animate attributeName="stroke-opacity" values="0.12;0.32;0.12" dur="1.8s" repeatCount="indefinite" />
+                  <animate attributeName="stroke-width" values="1.5;2.4;1.5" dur="1.8s" repeatCount="indefinite" />
+                </circle>
+                <circle
+                  cx={coords.x}
+                  cy={coords.y}
+                  r={auraRadius * 0.7}
+                  fill="none"
+                  stroke={highlightColor}
+                  strokeWidth={1.25}
+                  strokeOpacity={0.18}
+                  opacity={0.9}
+                >
+                  <animate attributeName="stroke-opacity" values="0.08;0.22;0.08" dur="1.8s" repeatCount="indefinite" />
+                  <animate attributeName="r" values={`${auraRadius * 0.62};${auraRadius * 0.76};${auraRadius * 0.62}`} dur="1.8s" repeatCount="indefinite" />
+                </circle>
+              </g>
+            );
+          })}
+        </g>,
+      );
+    }
+
     for (const [ringIndex, ringPositions] of positionsByRing.entries()) {
       const rotationAngle = ringRotationAngles[ringIndex - 1] ?? 0;
       const list = Array.from(ringPositions.values());
+      const ringDef = game.board.rings[ringIndex - 1];
+      if (!ringDef || ringDef.numSpaces <= 0) {
+        continue;
+      }
+      const rawRadius = MIN_RADIUS + (ringIndex * RING_SPACING);
+      const radius = Math.min(rawRadius, MAX_RADIUS);
+      const strokeW = ringIndex <= 2 ? 7 : ringIndex <= 4 ? 8 : 9;
 
       elements.push(
         <g
@@ -874,20 +951,24 @@ export function GameBoard() {
           pointerEvents="none"
         >
           {list.map(({ pos, count }) => {
-            const coords = positionToCoords(pos, game.board);
-            const alpha = Math.min(0.08 + count * 0.07, 0.28);
-            const strokeAlpha = Math.min(0.12 + count * 0.08, 0.42);
+            const alpha = Math.min(0.12 + count * 0.09, 0.38);
+            const strokeAlpha = Math.min(0.2 + count * 0.12, 0.68);
+            const startAngle = (pos.space / ringDef.numSpaces) * Math.PI * 2 - Math.PI / 2;
+            const endAngle = ((pos.space + 1) / ringDef.numSpaces) * Math.PI * 2 - Math.PI / 2;
+            const path = arcPath(CENTER, CENTER, radius, startAngle, endAngle);
 
             return (
-              <circle
+              <path
                 key={`hazard-affected-${pos.ring}-${pos.space}`}
-                cx={coords.x}
-                cy={coords.y}
-                r={5}
-                fill={`rgba(240,171,252,${alpha})`}
+                d={path}
+                fill="none"
                 stroke={`rgba(240,171,252,${strokeAlpha})`}
-                strokeWidth={1}
-              />
+                strokeWidth={strokeW}
+                strokeLinecap="round"
+                opacity={alpha}
+              >
+                <animate attributeName="opacity" values={`${Math.max(0.1, alpha * 0.55)};${Math.min(0.9, alpha * 1.25)};${Math.max(0.1, alpha * 0.55)}`} dur="1.8s" repeatCount="indefinite" />
+              </path>
             );
           })}
         </g>,
@@ -924,6 +1005,8 @@ export function GameBoard() {
           {ringObjects.map((obj) => {
             const coords = positionToCoords(obj.position, game.board);
             const objColor = getObjectColor(obj.type);
+
+            const isHazardOverlaySource = obj.type === 'hazard' && hazardOverlaySourceIds.has(obj.id);
 
             const isPinned = pinnedObjectIds.has(obj.id);
             const showLabel = isPinned || hoveredObjectId === obj.id;
@@ -1076,6 +1159,21 @@ export function GameBoard() {
                 <g
                   className={isTargeted ? 'drop-shadow-[0_0_12px_rgba(59,130,246,0.85)]' : ''}
                 >
+                  {isHazardOverlaySource && (
+                    <circle
+                      cx={coords.x}
+                      cy={coords.y}
+                      r={24}
+                      fill="none"
+                      stroke="#f0abfc"
+                      strokeWidth={2}
+                      strokeOpacity={0.25}
+                      pointerEvents="none"
+                    >
+                      <animate attributeName="r" values="22;27;22" dur="1.8s" repeatCount="indefinite" />
+                      <animate attributeName="stroke-opacity" values="0.12;0.35;0.12" dur="1.8s" repeatCount="indefinite" />
+                    </circle>
+                  )}
                   {isTargeted && (
                     <circle
                       cx={coords.x}
@@ -1195,6 +1293,7 @@ export function GameBoard() {
     return elements;
   }, [
     game?.board,
+    hazardOverlaySourceIds,
     currentPlayer,
     hoveredObjectId,
     pinnedObjectIds,

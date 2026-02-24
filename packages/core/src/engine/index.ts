@@ -8647,16 +8647,20 @@ export function computeHazardDamageForPosition(
 ): HazardDamage {
   const hazards = board.objects.filter(obj => obj.type === 'hazard');
 
+  const inRangePositions = BoardUtils.getPositionsWithinRange(position, HAZARD_CONFIG.range, board);
+  const encode = (pos: ShipPosition): string => `${pos.ring}:${pos.space}`;
+  const inRangeKeys = new Set(inRangePositions.map(encode));
+
   let totalHullDamage = 0;
   let totalLifeSupportReduction = 0;
 
   for (const hazard of hazards) {
-    const distance = BoardUtils.calculateDistance(position, hazard.position, board);
-
-    if (distance <= HAZARD_CONFIG.range) {
-      totalHullDamage += HAZARD_CONFIG.damage;
-      totalLifeSupportReduction += HAZARD_CONFIG.lifeSupportReduction;
+    if (!inRangeKeys.has(encode(hazard.position))) {
+      continue;
     }
+
+    totalHullDamage += HAZARD_CONFIG.damage;
+    totalLifeSupportReduction += HAZARD_CONFIG.lifeSupportReduction;
   }
 
   return {
