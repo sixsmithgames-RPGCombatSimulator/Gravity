@@ -905,11 +905,16 @@ export function createBoardFromConfig(options: CreateBoardOptions): Board {
   };
 }
 
-export function createInitialShip(position: ShipPosition): Ship {
+export function createInitialShip(
+  position: ShipPosition,
+  difficulty: 'easy' | 'normal' | 'hard' = 'hard',
+): Ship {
   const sections: Record<ShipSection, ShipSectionState> =
     {} as Record<ShipSection, ShipSectionState>;
 
   const sectionKeys = Object.values(SHIP_SECTIONS) as ShipSection[];
+
+  const hullBonus = difficulty === 'easy' ? 4 : difficulty === 'normal' ? 2 : 0;
 
   for (const section of sectionKeys) {
     const initialSection = INITIAL_SHIP_STATE[section];
@@ -922,11 +927,20 @@ export function createInitialShip(position: ShipPosition): Ship {
       );
     }
 
-    sections[section] = createShipSectionStateFromInitial(initialSection as {
+    const baseState = createShipSectionStateFromInitial(initialSection as {
       hull: number;
       powerDice: readonly number[];
       corridors: Partial<Record<ShipSection, number>>;
     });
+
+    const maxHull = SECTION_CONFIG[section]?.maxHull;
+    const clampedMaxHull = typeof maxHull === 'number' && Number.isFinite(maxHull) ? maxHull : baseState.hull;
+    const nextHull = Math.min(clampedMaxHull, baseState.hull + hullBonus);
+
+    sections[section] = {
+      ...baseState,
+      hull: nextHull,
+    };
   }
 
   const speed = INITIAL_SHIP_STATE.speed;
