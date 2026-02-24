@@ -814,6 +814,79 @@ export function GameBoard() {
     });
   }, [game?.board?.rings, ringRotationAngles]);
 
+  const hazardAffectedSpaces = useMemo(() => {
+    if (!game?.board?.rings || !game?.board?.objects) {
+      return [];
+    }
+
+    const hazards = game.board.objects.filter((obj) => obj.type === 'hazard');
+    if (hazards.length === 0) {
+      return [];
+    }
+
+    const positionsByRing = new Map<number, Map<string, { pos: ShipPosition; count: number }>>();
+
+    for (const hazard of hazards) {
+      for (const ring of game.board.rings) {
+        for (let space = 0; space < ring.numSpaces; space += 1) {
+          const pos: ShipPosition = { ring: ring.index, space };
+          const distance = BoardUtils.calculateDistance(hazard.position, pos, game.board);
+          if (distance > HAZARD_CONFIG.range) {
+            continue;
+          }
+
+          if (!positionsByRing.has(pos.ring)) {
+            positionsByRing.set(pos.ring, new Map());
+          }
+
+          const key = `${pos.ring}:${pos.space}`;
+          const ringMap = positionsByRing.get(pos.ring)!;
+          const existing = ringMap.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            ringMap.set(key, { pos, count: 1 });
+          }
+        }
+      }
+    }
+
+    const elements: JSX.Element[] = [];
+
+    for (const [ringIndex, ringPositions] of positionsByRing.entries()) {
+      const rotationAngle = ringRotationAngles[ringIndex - 1] ?? 0;
+      const list = Array.from(ringPositions.values());
+
+      elements.push(
+        <g
+          key={`hazard-affected-${ringIndex}`}
+          transform={`rotate(${rotationAngle} ${CENTER} ${CENTER})`}
+          pointerEvents="none"
+        >
+          {list.map(({ pos, count }) => {
+            const coords = positionToCoords(pos, game.board);
+            const alpha = Math.min(0.08 + count * 0.07, 0.28);
+            const strokeAlpha = Math.min(0.12 + count * 0.08, 0.42);
+
+            return (
+              <circle
+                key={`hazard-affected-${pos.ring}-${pos.space}`}
+                cx={coords.x}
+                cy={coords.y}
+                r={7}
+                fill={`rgba(240,171,252,${alpha})`}
+                stroke={`rgba(240,171,252,${strokeAlpha})`}
+                strokeWidth={1}
+              />
+            );
+          })}
+        </g>,
+      );
+    }
+
+    return elements;
+  }, [game?.board, ringRotationAngles]);
+
   // Memoize object rendering with rotation transforms
   const objects = useMemo(() => {
     if (!game?.board?.objects) return [];
@@ -929,23 +1002,6 @@ export function GameBoard() {
             })();
 
             const isHazard = obj.type === 'hazard';
-            const hazardRangeRadius = (() => {
-              if (!isHazard) {
-                return null;
-              }
-
-              const ringData = game.board.rings[obj.position.ring - 1];
-              const ringRadius = Math.min(MIN_RADIUS + (obj.position.ring * RING_SPACING), MAX_RADIUS);
-              const spaces = ringData?.numSpaces ?? 0;
-
-              const tangential =
-                spaces > 0
-                  ? 2 * ringRadius * Math.sin((Math.min(HAZARD_CONFIG.range, Math.floor(spaces / 2)) * Math.PI) / spaces)
-                  : 0;
-              const radial = HAZARD_CONFIG.range * RING_SPACING;
-
-              return Math.min(Math.max(tangential, radial) + RING_SPACING * 0.35, 240);
-            })();
 
             return (
               <g
@@ -1007,54 +1063,47 @@ export function GameBoard() {
                   setHoveredObjectId(obj.id);
                 }}
               >
-                {isHazard && hazardRangeRadius !== null && (
-                  <circle
-                    cx={coords.x}
-                    cy={coords.y}
-                    r={hazardRangeRadius}
-                    fill="#f0abfc20"
-                    stroke="#f0abfc90"
-                    strokeWidth={1.25}
-                    strokeDasharray="6 6"
-                    pointerEvents="none"
-                  />
-                )}
-                {/* Targeted highlight ring */}
-                {isTargeted && (
-                  <circle
-                    cx={coords.x}
-                    cy={coords.y}
-                    r={16}
-                    fill="none"
-                    stroke={objColor}
-                    strokeWidth={3}
-                    strokeOpacity={0.8}
-                    pointerEvents="none"
-                  />
-                )}
-                {/* Range-eligible indicator ring */}
-                {shouldGateSelection && isInRange && (
-                  <circle
-                    cx={coords.x}
-                    cy={coords.y}
-                    r={18}
-                    fill="none"
-                    stroke={
-                      rangePreview?.actionType === 'attack'
-                        ? '#f87171'
-                        : rangePreview?.actionType === 'acquire'
-                          ? '#fb923c'
-                          : '#c084fc'
-                    }
-                    strokeWidth={2}
-                    strokeOpacity={0.55}
-                    strokeDasharray="2 6"
-                    pointerEvents="none"
-                  />
-                )}
-                {/* Object SVG icon – scale based on ring (inner=smaller to avoid overlap) */}
-                <g filter="url(#objectGlow)">
-                  {renderObjectIcon(obj.type, coords.x, coords.y, objColor, 0.7 + (obj.position.ring / NUM_RINGS) * 0.5)}
+                <g
+                  className={isTargeted ? 'drop-shadow-[0_0_12px_rgba(59,130,246,0.85)]' : ''}
+                >
+                  {isTargeted && (
+                    <circle
+                      cx={coords.x}
+                      cy={coords.y}
+                      r={18}
+                      fill="none"
+                      stroke={objColor}
+                      strokeWidth={3}
+                      strokeOpacity={0.8}
+                      pointerEvents="none"
+                    />
+                  )}
+
+                  {/* Range-eligible indicator ring */}
+                  {shouldGateSelection && isInRange && (
+                    <circle
+                      cx={coords.x}
+                      cy={coords.y}
+                      r={18}
+                      fill="none"
+                      stroke={
+                        rangePreview?.actionType === 'attack'
+                          ? '#f87171'
+                          : rangePreview?.actionType === 'acquire'
+                            ? '#fb923c'
+                            : '#c084fc'
+                      }
+                      strokeWidth={2}
+                      strokeOpacity={0.55}
+                      strokeDasharray="2 6"
+                      pointerEvents="none"
+                    />
+                  )}
+
+                  {/* Object SVG icon – scale based on ring (inner=smaller to avoid overlap) */}
+                  <g filter="url(#objectGlow)">
+                    {renderObjectIcon(obj.type, coords.x, coords.y, objColor, 0.7 + (obj.position.ring / NUM_RINGS) * 0.5)}
+                  </g>
                 </g>
 
                 {(shouldGateSelection || isHazard) && (
@@ -1599,6 +1648,9 @@ export function GameBoard() {
 
         {/* Rings */}
         {rings}
+
+        {/* Hazard affected spaces (exact distance <= range) */}
+        {hazardAffectedSpaces}
 
         {/* Space objects */}
         {objects}

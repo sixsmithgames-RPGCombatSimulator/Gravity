@@ -231,9 +231,8 @@ function seedInitialObjects(game: GameState): GameState {
   // Wrecked ships: (number of players) on ring 5
   addSpread('wrecked_ship', 5, objectPlayerCount);
 
-  // Functional stations: 1 on ring 6, 1 on ring 8 for variety
+  // Functional stations: 1 at start
   addSpread('functional_station', 6, 1);
-  addSpread('functional_station', 8, 1);
 
   return {
     ...game,
