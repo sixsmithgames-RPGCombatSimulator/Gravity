@@ -1302,7 +1302,7 @@ export function GameBoard() {
   }
 
   return (
-    <div className="w-full h-full relative flex items-center justify-start bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
+    <div className="w-full h-full relative flex items-center justify-start bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden pl-5">
       {/* Zoom controls overlay */}
       <div className="absolute top-3 right-3 z-20 flex flex-col gap-1">
         <button
