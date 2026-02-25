@@ -913,8 +913,13 @@ export function createInitialShip(
     {} as Record<ShipSection, ShipSectionState>;
 
   const sectionKeys = Object.values(SHIP_SECTIONS) as ShipSection[];
-
-  const hullBonus = difficulty === 'easy' ? 4 : difficulty === 'normal' ? 2 : 0;
+  const layout = SHIP_CONNECTION_LAYOUT as Record<
+    ShipSection,
+    {
+      corridors?: Partial<Record<ShipSection, number>>;
+      conduitConnections?: Partial<Record<ShipSection, number>>;
+    }
+  >;
 
   for (const section of sectionKeys) {
     const initialSection = INITIAL_SHIP_STATE[section];
@@ -935,12 +940,85 @@ export function createInitialShip(
 
     const maxHull = SECTION_CONFIG[section]?.maxHull;
     const clampedMaxHull = typeof maxHull === 'number' && Number.isFinite(maxHull) ? maxHull : baseState.hull;
-    const nextHull = Math.min(clampedMaxHull, baseState.hull + hullBonus);
+    const targetHull = (() => {
+      if (section === SHIP_SECTIONS.BRIDGE) {
+        if (difficulty === 'easy') {
+          return 12;
+        }
+        if (difficulty === 'normal') {
+          return 9;
+        }
+      }
+      if (section === SHIP_SECTIONS.ENGINEERING) {
+        if (difficulty === 'easy') {
+          return 18;
+        }
+        if (difficulty === 'normal') {
+          return 12;
+        }
+      }
+      return baseState.hull;
+    })();
+    const nextHull = Math.min(clampedMaxHull, targetHull);
 
     sections[section] = {
       ...baseState,
       hull: nextHull,
     };
+  }
+
+  const setAllCorridorsIntact = () => {
+    for (const section of sectionKeys) {
+      for (const other of sectionKeys) {
+        if (section === other) {
+          sections[section].corridors[other] = 0;
+          continue;
+        }
+        const hasEdge = layout[section]?.corridors?.[other] === 1 || layout[other]?.corridors?.[section] === 1;
+        sections[section].corridors[other] = hasEdge ? 1 : 0;
+      }
+    }
+  };
+
+  const getMaxEdgeConduits = (a: ShipSection, b: ShipSection): number => {
+    const maxAB = layout[a]?.conduitConnections?.[b] ?? 0;
+    const maxBA = layout[b]?.conduitConnections?.[a] ?? 0;
+    return Math.max(maxAB, maxBA, 0);
+  };
+
+  const increaseConduitsForTargets = (targets: ShipSection[]) => {
+    const targetSet = new Set(targets);
+    for (let i = 0; i < sectionKeys.length; i += 1) {
+      for (let j = i + 1; j < sectionKeys.length; j += 1) {
+        const a = sectionKeys[i];
+        const b = sectionKeys[j];
+        if (!targetSet.has(a) && !targetSet.has(b)) {
+          continue;
+        }
+        const maxEdge = getMaxEdgeConduits(a, b);
+        if (maxEdge <= 0) {
+          continue;
+        }
+        const currentAB = sections[a].conduitConnections[b] ?? 0;
+        const currentBA = sections[b].conduitConnections[a] ?? 0;
+        const current = Math.min(currentAB, currentBA);
+        if (current >= maxEdge) {
+          continue;
+        }
+        const next = Math.min(maxEdge, current + 1);
+        sections[a].conduitConnections[b] = Math.min(maxEdge, Math.max(sections[a].conduitConnections[b] ?? 0, next));
+        sections[b].conduitConnections[a] = Math.min(maxEdge, Math.max(sections[b].conduitConnections[a] ?? 0, next));
+      }
+    }
+  };
+
+  if (difficulty === 'normal' || difficulty === 'easy') {
+    setAllCorridorsIntact();
+    increaseConduitsForTargets([SHIP_SECTIONS.ENGINEERING]);
+  }
+
+  if (difficulty === 'easy') {
+    increaseConduitsForTargets([SHIP_SECTIONS.MED_LAB, SHIP_SECTIONS.DRIVES]);
   }
 
   const speed = INITIAL_SHIP_STATE.speed;

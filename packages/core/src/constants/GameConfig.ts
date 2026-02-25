@@ -217,13 +217,13 @@ export const SHIP_CONNECTION_LAYOUT = {
  */
 export const INITIAL_SHIP_STATE = {
   [SHIP_SECTIONS.BRIDGE]: {
-    hull: 12,
+    hull: 6,
     powerDice: [6, 0],  
     corridors: { [SHIP_SECTIONS.MED_LAB]: 1, [SHIP_SECTIONS.SCI_LAB]: 1, [SHIP_SECTIONS.ENGINEERING]: 1 },
     conduitConnections: { [SHIP_SECTIONS.MED_LAB]: 1, [SHIP_SECTIONS.SCI_LAB]: 1, [SHIP_SECTIONS.ENGINEERING]: 1 },
   },
   [SHIP_SECTIONS.ENGINEERING]: {
-    hull: 18,
+    hull: 6,
     powerDice: [1, 1],
     corridors: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DEFENSE]: 0 },
     conduitConnections: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DRIVES]: 0, [SHIP_SECTIONS.DEFENSE]: 0 },
@@ -235,19 +235,19 @@ export const INITIAL_SHIP_STATE = {
     conduitConnections: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DRIVES]: 0 },
   },
   [SHIP_SECTIONS.DRIVES]: {
-    hull: 12, // Damaged at start
+    hull: 0, // Damaged at start
     powerDice: [],
     corridors: {}, // No corridors - crew cannot access Drives directly
     conduitConnections: { [SHIP_SECTIONS.MED_LAB]: 0, [SHIP_SECTIONS.ENGINEERING]: 0 },
   },
   [SHIP_SECTIONS.SCI_LAB]: {
-    hull: 6, // Damaged at start
+    hull: 0, // Damaged at start
     powerDice: [],
     corridors: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DEFENSE]: 0 },
     conduitConnections: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DEFENSE]: 0 },
   },
   [SHIP_SECTIONS.DEFENSE]: {
-    hull: 6, // Damaged at start
+    hull: 0, // Damaged at start
     powerDice: [],
     corridors: { [SHIP_SECTIONS.SCI_LAB]: 0, [SHIP_SECTIONS.ENGINEERING]: 0 },
     conduitConnections: { [SHIP_SECTIONS.SCI_LAB]: 0, [SHIP_SECTIONS.ENGINEERING]: 0 },
