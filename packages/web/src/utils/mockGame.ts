@@ -6,14 +6,10 @@ import type {
   AnyCrew,
   GameSettings,
   AnySpaceObject,
-  ShipSection,
-  ShipSectionState,
 } from '@gravity/core';
 import {
   SHIP_SECTIONS,
   BOARD_CONFIG,
-  SHIP_CONNECTION_LAYOUT,
-  SECTION_CONFIG,
   createInitialShip,
   createNewGame,
   addPlayerToGame,
@@ -251,98 +247,7 @@ function seedInitialObjects(game: GameState): GameState {
  * Note: Delegate to engine's createInitialShip so starting hull/power match INITIAL_SHIP_STATE
  */
 function createMockShip(position: { ring: number; space: number }, difficulty: Difficulty): Ship {
-  const ship = createInitialShip(position as Ship['position']);
-  return applyDifficultyToShip(ship, difficulty);
-}
-
-function applyDifficultyToShip(ship: Ship, difficulty: Difficulty): Ship {
-  if (difficulty === 'hard') {
-    return ship;
-  }
-
-  const sectionKeys = Object.values(SHIP_SECTIONS) as ShipSection[];
-  const nextSections: Record<ShipSection, ShipSectionState> = {} as Record<ShipSection, ShipSectionState>;
-
-  for (const sectionKey of sectionKeys) {
-    const sectionState = ship.sections[sectionKey];
-    nextSections[sectionKey] = {
-      hull: sectionState.hull,
-      powerDice: [...sectionState.powerDice],
-      corridors: { ...sectionState.corridors },
-      conduitConnections: { ...sectionState.conduitConnections },
-    };
-  }
-
-  // Ensure all corridors are intact for non-hard difficulties
-  const connectionLayout = SHIP_CONNECTION_LAYOUT as Record<string, {
-    corridors?: Partial<Record<ShipSection, number>>;
-    conduitConnections?: Partial<Record<ShipSection, number>>;
-  }>;
-
-  for (const sectionKey of sectionKeys) {
-    const newCorridors: Record<ShipSection, number> = {} as Record<ShipSection, number>;
-    const newConduits: Record<ShipSection, number> = {} as Record<ShipSection, number>;
-
-    for (const otherKey of sectionKeys) {
-      if (otherKey === sectionKey) {
-        newCorridors[otherKey] = 0;
-        newConduits[otherKey] = 0;
-        continue;
-      }
-
-      const hasCorridorEdge =
-        (connectionLayout[sectionKey]?.corridors?.[otherKey] ?? 0) === 1 ||
-        (connectionLayout[otherKey]?.corridors?.[sectionKey] ?? 0) === 1;
-      newCorridors[otherKey] = hasCorridorEdge ? 1 : 0;
-
-      const hasConduitEdge =
-        (connectionLayout[sectionKey]?.conduitConnections?.[otherKey] ?? 0) > 0 ||
-        (connectionLayout[otherKey]?.conduitConnections?.[sectionKey] ?? 0) > 0;
-      newConduits[otherKey] = hasConduitEdge ? 1 : 0;
-    }
-
-    nextSections[sectionKey].corridors = newCorridors;
-    nextSections[sectionKey].conduitConnections = newConduits;
-  }
-
-  const targetHull = difficulty === 'normal' ? 1 : difficulty === 'easy' ? 3 : null;
-  const targetPower = difficulty === 'easy' ? 3 : null;
-
-  for (const sectionKey of sectionKeys) {
-    const maxHull = SECTION_CONFIG[sectionKey]?.maxHull ?? 12;
-    if (targetHull !== null) {
-      nextSections[sectionKey].hull = Math.min(maxHull, targetHull);
-    }
-
-    if (targetPower !== null) {
-      nextSections[sectionKey].powerDice = createPowerDiceForTotal(targetPower);
-    }
-  }
-
-  const bridgeState = nextSections[SHIP_SECTIONS.BRIDGE];
-  if (bridgeState) {
-    const requiredPower = SECTION_CONFIG[SHIP_SECTIONS.BRIDGE]?.powerRequired ?? 0;
-    const currentPower = bridgeState.powerDice.reduce((sum, die) => sum + die, 0);
-    if (requiredPower > 0 && currentPower < requiredPower) {
-      bridgeState.powerDice = createPowerDiceForTotal(requiredPower);
-    }
-  }
-
-  return {
-    ...ship,
-    sections: nextSections,
-  };
-}
-
-function createPowerDiceForTotal(total: number): number[] {
-  const dice: number[] = [];
-  let remaining = total;
-  while (remaining > 0) {
-    const value = Math.min(6, remaining);
-    dice.push(value);
-    remaining -= value;
-  }
-  return dice.length > 0 ? dice : [0];
+  return createInitialShip(position as Ship['position'], difficulty);
 }
 
 /**
