@@ -1909,6 +1909,10 @@ function getRestorePowerBonusForCrew(crew: AnyCrew | Captain): number {
     }
   }
 
+  if ('type' in crew && crew.type === 'captain') {
+    return 2;
+  }
+
   return 0;
 }
 
