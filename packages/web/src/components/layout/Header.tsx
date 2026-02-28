@@ -54,9 +54,14 @@ export function Header() {
             <circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.5" />
             <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.8" />
           </svg>
-          <h1 className="font-display text-xl font-bold tracking-[0.2em] bg-gradient-to-r from-blue-300 via-slate-100 to-blue-300 bg-clip-text text-transparent">
-            GRAVITY
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-xl font-bold tracking-[0.2em] bg-gradient-to-r from-blue-300 via-slate-100 to-blue-300 bg-clip-text text-transparent">
+              GRAVITY
+            </h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-800/80 border border-blue-500/40 text-blue-100 shadow-[0_0_10px_rgba(59,130,246,0.25)]">
+              Welcome to Early Beta
+            </span>
+          </div>
         </div>
 
         {/* Turn and phase info */}

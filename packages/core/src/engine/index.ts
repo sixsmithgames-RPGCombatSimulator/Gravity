@@ -5372,6 +5372,10 @@ function getManeuverBonus(crew: AnyCrew | Captain): number {
     }
   }
 
+  if (crew.type === 'captain') {
+    return 1;
+  }
+
   return 0;
 }
 

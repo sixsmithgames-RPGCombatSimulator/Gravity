@@ -5375,9 +5375,7 @@ export function ShipDashboard() {
 
                 const bridgeFullyPowered = ShipUtils.isFullyPowered(ship, SHIP_SECTIONS.BRIDGE);
                 const bridgeBonus = bridgeFullyPowered ? 1 : 0;
-                const crewBonus = performer && !('captainType' in performer)
-                  ? (CrewUtils.getBonuses(performer).acceleration ?? 0)
-                  : 0;
+                const crewBonus = performer ? (CrewUtils.getBonuses(performer).acceleration ?? 0) : 0;
                 const crewBonusSafe = typeof crewBonus === 'number' && Number.isFinite(crewBonus) ? crewBonus : 0;
                 const base = typeof powerSpent === 'number' && Number.isFinite(powerSpent) ? powerSpent : 0;
                 const total = base + bridgeBonus + crewBonusSafe;
@@ -6729,14 +6727,22 @@ export function ShipDashboard() {
                     }
 
                     const zoneLabel = previewDamageSummary.ringColor.toUpperCase();
-                    const flavor =
-                      previewDamageSummary.ringColor === 'red'
-                        ? 'Red ring. The gravity well wants a sacrifice.'
-                        : previewDamageSummary.ringColor === 'orange'
-                          ? 'Orange ring. Your hull is about to get sandblasted by the cosmos.'
-                          : previewDamageSummary.ringColor === 'yellow'
-                            ? 'Yellow ring. Minor turbulence ahead.'
-                            : 'Calm space… mostly.';
+                    const flavor = (() => {
+                      const hasHazard = haz.hull > 0 || haz.lifeSupportReduction > 0;
+                      if (hasHazard) {
+                        return 'Radiation warning. Hazard in range.';
+                      }
+                      if (previewDamageSummary.ringColor === 'red') {
+                        return 'Red ring. The gravity well wants a sacrifice.';
+                      }
+                      if (previewDamageSummary.ringColor === 'orange') {
+                        return 'Orange ring. Your hull is about to get sandblasted by the cosmos.';
+                      }
+                      if (previewDamageSummary.ringColor === 'yellow') {
+                        return 'Yellow ring. Minor turbulence ahead.';
+                      }
+                      return 'Calm space.';
+                    })();
 
                     const envLine =
                       env.hull > 0 || env.conduits > 0 || env.corridors > 0
