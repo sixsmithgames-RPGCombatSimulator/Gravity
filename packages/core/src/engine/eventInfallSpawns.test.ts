@@ -163,4 +163,25 @@ describe('event infall object spawns', () => {
     expect(after.board.objects.length).toBeGreaterThanOrEqual(3);
     expect(after.board.objects.length).toBeLessThanOrEqual(6);
   });
+
+  it('never spawns an object on a player ship position (safety guard)', () => {
+    const started = createGameWithPlayers({ gameId: 'event-infall-no-ship-overlap', playerCount: 2 });
+
+    const game = {
+      ...started,
+      currentTurn: 4,
+      eventDeck: [],
+    };
+
+    const after = applyEventPhase(game);
+
+    const shipPositions = new Set(
+      Array.from(after.players.values()).map(player => `${player.ship.position.ring}:${player.ship.position.space}`),
+    );
+
+    for (const obj of after.board.objects) {
+      const key = `${obj.position.ring}:${obj.position.space}`;
+      expect(shipPositions.has(key)).toBe(false);
+    }
+  });
 });

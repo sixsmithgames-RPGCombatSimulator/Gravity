@@ -482,10 +482,24 @@ function applyInfallObjectSpawns(game: GameState): GameState {
     return game;
   }
 
+  // Final safety guard: never spawn on an occupied space (ship or existing object)
+  const occupiedKeys = new Set<string>();
+
+  const encode = (position: ShipPosition): string => `${position.ring}:${position.space}`;
+
+  game.board.objects.forEach(obj => occupiedKeys.add(encode(obj.position)));
+  Array.from(game.players.values()).forEach(player => occupiedKeys.add(encode(player.ship.position)));
+
+  const safeSpawnPositions = spawnPositions.filter(position => !occupiedKeys.has(encode(position)));
+
+  if (safeSpawnPositions.length === 0) {
+    return game;
+  }
+
   const newObjects: AnySpaceObject[] = [];
 
   // Always include exactly one hazard
-  const shuffledPositions = [...spawnPositions];
+  const shuffledPositions = [...safeSpawnPositions];
   shuffleInPlaceWithRng(shuffledPositions, rng);
 
   shuffledPositions.forEach((position, index) => {
