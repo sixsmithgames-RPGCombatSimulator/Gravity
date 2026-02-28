@@ -41,11 +41,11 @@ export function Header() {
   const statusDotColor = game.status === 'in_progress' ? 'bg-emerald-400' : 'bg-amber-400';
 
   return (
-    <header className="relative" style={{ background: 'linear-gradient(180deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9))' }}>
+    <header className="relative bg-slate-950/60 backdrop-blur-sm border-b border-gravity-border/20">
       {/* Bottom border glow */}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
 
-      <div className="h-12 px-4 flex items-center justify-between">
+      <div className="h-11 px-4 flex items-center justify-between">
         {/* Logo and title */}
         <div className="flex items-center gap-3">
           {/* Mini gravity well icon */}

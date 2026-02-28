@@ -46,7 +46,20 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden bg-slate-950 relative">
+      {/* Starry space background for entire app */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: `radial-gradient(2px 2px at 20% 30%, white, transparent),
+                          radial-gradient(2px 2px at 60% 70%, white, transparent),
+                          radial-gradient(1px 1px at 50% 50%, white, transparent),
+                          radial-gradient(1px 1px at 80% 10%, white, transparent),
+                          radial-gradient(2px 2px at 90% 60%, white, transparent),
+                          radial-gradient(1px 1px at 33% 80%, white, transparent),
+                          radial-gradient(1px 1px at 15% 60%, white, transparent)`,
+        backgroundSize: '200px 200px, 300px 300px, 250px 250px, 400px 400px, 350px 350px, 280px 280px, 320px 320px',
+        backgroundPosition: '0 0, 40px 60px, 130px 270px, 70px 100px, 200px 150px, 160px 50px, 90px 180px',
+        opacity: 0.4
+      }} />
       {/* Header */}
       <Header />
 
@@ -61,12 +74,11 @@ function App() {
           <GameEndOverlay />
         </div>
 
-        {/* Ship dashboard - fixed width sidebar (playmat temporarily hidden) */}
+        {/* Ship dashboard - larger width for better visibility */}
         <aside
-          className="w-[clamp(540px,42vw,760px)] min-w-[540px] border-l border-gravity-border overflow-y-auto bg-slate-900"
+          className="w-[clamp(620px,48vw,880px)] min-w-[620px] border-l border-gravity-border/30 overflow-y-auto bg-slate-950/80 backdrop-blur-sm"
         >
-          {/* Inner overlay panel to keep text readable while aligning to mat */}
-          <div className="h-full bg-slate-900/70 px-3 py-3 flex flex-col">
+          <div className="h-full px-4 py-4 flex flex-col">
             <ShipDashboard />
           </div>
         </aside>
