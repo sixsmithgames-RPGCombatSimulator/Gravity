@@ -8298,27 +8298,60 @@ export function updateOrbitsAndObjects(game: GameState): GameState {
       );
     }
 
-    const rotationDegreesForShip = TURN_CONFIG.RING_ROTATION_DEGREES_BY_PAIR[position.ring - 1] ?? 20;
-    const rotationInSpacesForShip = degreesToSpaces(rotationDegreesForShip, spacesForShip);
+    // Apply orbit drift based on speed requirements.
+    // Root cause: Ships with insufficient speed were not falling inward with other objects,
+    // and negative-speed geo-sync ships should stay fixed relative to the planet.
+    const speedRequirement = ringForShip.speedRequirement;
+    const isGeoSyncOrbit = player.ship.speed < 0 && Math.abs(player.ship.speed) === speedRequirement;
+    const isSpeedInsufficient = player.ship.speed < speedRequirement;
+
+    let newRing = position.ring;
+
+    if (shouldFall && isSpeedInsufficient && !isGeoSyncOrbit && newRing > 1) {
+      newRing -= 1;
+    }
+
+    const ringAfterFall = rings[newRing - 1];
+
+    if (!ringAfterFall) {
+      throw new Error(
+        'Cannot update orbits and objects because a player ship would move to a non-existent ring after applying speed rules. ' +
+          `Root cause: player "${player.id}" ship would move to ring=${newRing}, but only ${rings.length} rings exist. ` +
+          'Fix: Ensure speed-based orbit adjustments keep ships within valid ring indices.',
+      );
+    }
+
+    const spacesAfterFall = ringAfterFall.numSpaces;
+
+    if (spacesAfterFall <= 0) {
+      throw new Error(
+        'Cannot update orbits and objects because a ring has a non-positive number of spaces after applying speed rules. ' +
+          `Root cause: ring index ${ringAfterFall.index} has numSpaces=${spacesAfterFall}. ` +
+          'Fix: Ensure BOARD_CONFIG.SPACES_PER_RING defines a positive space count for every ring.',
+      );
+    }
+
+    const rotationDegreesForShip = TURN_CONFIG.RING_ROTATION_DEGREES_BY_PAIR[newRing - 1] ?? 20;
+    const rotationInSpacesForShip = degreesToSpaces(rotationDegreesForShip, spacesAfterFall);
     const effectiveDeltaForShip = Math.round(rotationInSpacesForShip);
 
     let newSpace = position.space;
 
-    if (effectiveDeltaForShip !== 0) {
+    if (!isGeoSyncOrbit && effectiveDeltaForShip !== 0) {
       const directionMultiplier = game.board.rotationDirection === 'clockwise' ? 1 : -1;
       newSpace += directionMultiplier * effectiveDeltaForShip;
 
       if (newSpace < 0) {
-        newSpace = (newSpace % spacesForShip) + spacesForShip;
+        newSpace = (newSpace % spacesAfterFall) + spacesAfterFall;
       }
 
-      newSpace %= spacesForShip;
+      newSpace %= spacesAfterFall;
     }
 
     const updatedShip: Ship = {
       ...player.ship,
       position: {
-        ring: position.ring,
+        ring: newRing,
         space: newSpace,
       },
     };
