@@ -184,4 +184,49 @@ describe('event infall object spawns', () => {
       expect(shipPositions.has(key)).toBe(false);
     }
   });
+
+  it('gravity flux object movement never lands on a player ship', () => {
+    const started = createGameWithPlayers({ gameId: 'event-gravity-flux-ship-avoid', playerCount: 2 });
+
+    // Seed initial objects adjacent to ships to force movement over ship spaces
+    const objectA = {
+      id: 'obj-a',
+      type: 'hazard' as const,
+      position: { ...started.players.get('player-1')!.ship.position },
+    };
+
+    const objectB = {
+      id: 'obj-b',
+      type: 'debris' as const,
+      position: { ...started.players.get('player-2')!.ship.position },
+    };
+
+    const game = {
+      ...started,
+      currentTurn: 4,
+      eventDeck: [
+        {
+          id: 'event_gravity_flux_objects_forward',
+          name: 'Gravity Flux',
+          description: 'Move objects forward',
+          effects: { kind: 'gravity_flux_objects_forward' },
+        },
+      ],
+      board: {
+        ...started.board,
+        objects: [objectA as any, objectB as any],
+      },
+    };
+
+    const after = applyEventPhase(game);
+
+    const shipPositions = new Set(
+      Array.from(after.players.values()).map(player => `${player.ship.position.ring}:${player.ship.position.space}`),
+    );
+
+    for (const obj of after.board.objects) {
+      const key = `${obj.position.ring}:${obj.position.space}`;
+      expect(shipPositions.has(key)).toBe(false);
+    }
+  });
 });

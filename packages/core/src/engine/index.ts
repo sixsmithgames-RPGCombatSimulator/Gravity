@@ -7867,6 +7867,11 @@ function applyHazardsAddD3Event(game: GameState): GameState {
 
 function applyGravityFluxObjectsEvent(game: GameState, direction: 1 | -1): GameState {
   const board = game.board;
+  const shipPositions = new Set<string>(
+    Array.from(game.players.values()).map(player => `${player.ship.position.ring}:${player.ship.position.space}`),
+  );
+
+  const encode = (ring: number, space: number): string => `${ring}:${space}`;
 
   const movedObjects: AnySpaceObject[] = board.objects.map(object => {
     const ring = board.rings[object.position.ring - 1];
@@ -7896,6 +7901,18 @@ function applyGravityFluxObjectsEvent(game: GameState, direction: 1 | -1): GameS
     }
 
     newSpace %= spaces;
+
+    // Do not move an object onto a player ship; advance until a free non-ship space is found (or stay put)
+    let attempts = 0;
+    while (attempts < spaces && shipPositions.has(encode(object.position.ring, newSpace))) {
+      newSpace = (newSpace + direction + spaces) % spaces;
+      attempts += 1;
+    }
+
+    if (shipPositions.has(encode(object.position.ring, newSpace))) {
+      // Fallback: if every space on this ring is occupied by ships (degenerate), leave object in place
+      newSpace = object.position.space;
+    }
 
     return {
       ...object,
