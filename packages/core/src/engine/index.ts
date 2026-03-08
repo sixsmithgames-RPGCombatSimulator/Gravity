@@ -5398,6 +5398,9 @@ function moveShip(
 ): Ship {
   let newRing = ship.position.ring;
   let newSpace = ship.position.space;
+  // Track updated tangential velocity: forward increases positive speed, backward sets negative.
+  // Root cause: Maneuvering backward previously left speed unchanged, breaking consistency with controls.
+  let newSpeed = ship.speed;
 
   const currentRing = board.rings[ship.position.ring - 1];
 
@@ -5413,11 +5416,13 @@ function moveShip(
     case 'forward':
       // Move forward along the ring (counterclockwise per rulebook)
       newSpace = (ship.position.space + acceleration) % currentRing.numSpaces;
+      newSpeed = Math.abs(acceleration);
       break;
 
     case 'backward':
       // Move backward along the ring
       newSpace = (ship.position.space - acceleration + currentRing.numSpaces) % currentRing.numSpaces;
+      newSpeed = -Math.abs(acceleration);
       break;
 
     case 'inward':
@@ -5495,6 +5500,7 @@ function moveShip(
 
   return {
     ...ship,
+    speed: newSpeed,
     position: newPosition,
   };
 }

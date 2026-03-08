@@ -1,7 +1,7 @@
-# Coding Standards - Iron-Clad Rules
+# Coding Standards - Gravity Rules
 
 ## 1. Error Handling - No Fallbacks Policy
-**RULE**: Never use fallback values, default assumptions, or silent failure handling.
+**RULE**: Never use fallback values, default assumptions, or silent failure handling. Instead throw errors with clear messages and root causes. Provide actionable steps for the user to fix the issue.
 
 **REQUIREMENTS**:
 - Implement explicit error trapping for all operations that can fail
