@@ -2884,7 +2884,6 @@ function CrewToken({
   crew,
   isReviveTarget,
   canSelectReviveTarget,
-  reviveBlockedReason,
   onSelectReviveTarget,
   isStimDoctor,
   canSelectStimDoctor,
@@ -2895,7 +2894,6 @@ function CrewToken({
   crew: AnyCrew | Captain;
   isReviveTarget?: boolean;
   canSelectReviveTarget?: boolean;
-  reviveBlockedReason?: string;
   onSelectReviveTarget?: () => void;
   isStimDoctor?: boolean;
   canSelectStimDoctor?: boolean;
@@ -3489,18 +3487,18 @@ export function ShipDashboard() {
   const acquireActions = ui.plannedActions.filter((a) => a.type === 'acquire');
   const attackActions = ui.plannedActions.filter((a) => a.type === 'attack');
 
-  const getReviveCapacityStatus = (crewMember: AnyCrew | Captain): { canSelect: boolean; blockedReason?: string } => {
+  const getReviveCapacityStatus = (crewMember: AnyCrew | Captain): { canSelect: boolean } => {
     if (!hasPendingRevive) {
       return { canSelect: false };
     }
     if (crewMember.status !== 'unconscious') {
-      return { canSelect: false, blockedReason: 'Only unconscious crew can be revived.' };
+      return { canSelect: false };
     }
 
     const alreadySelected = crewMember.id === currentReviveTargetId;
     const hasHeadroom = reviveCapacityHeadroom > 0;
     if (!hasHeadroom && !alreadySelected) {
-      return { canSelect: false, blockedReason: 'No life support capacity remaining for additional revives.' };
+      return { canSelect: false };
     }
 
     return { canSelect: true };
@@ -4289,7 +4287,7 @@ export function ShipDashboard() {
               CONFIRM CLEAR
             </Dialog.Title>
 
-            <div className="mt-2 text-[10px] text-gravity-muted whitespace-pre-wrap">
+            <Dialog.Description className="mt-2 text-[10px] text-gravity-muted whitespace-pre-wrap">
               {(() => {
                 if (!clearConfirm) {
                   return '';
@@ -4316,7 +4314,7 @@ export function ShipDashboard() {
                   'This does not move crew, undo damage, or refund power already spent in prior turns.'
                 );
               })()}
-            </div>
+            </Dialog.Description>
 
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
@@ -4368,7 +4366,7 @@ export function ShipDashboard() {
           <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[100]" />
           <Dialog.Content className="fixed top-0 right-0 h-full w-[min(420px,94vw)] border-l border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-2xl overflow-y-auto z-[101]">
             <div className="flex items-start justify-between gap-2">
-              <div className="text-sm font-bold tracking-wide">UPGRADE</div>
+              <Dialog.Title className="text-sm font-bold tracking-wide">UPGRADE</Dialog.Title>
               <Dialog.Close asChild>
                 <button
                   type="button"
@@ -4378,6 +4376,10 @@ export function ShipDashboard() {
                 </button>
               </Dialog.Close>
             </div>
+
+            <Dialog.Description className="mt-2 text-[10px] text-gravity-muted">
+              Review the selected upgrade and its current power state.
+            </Dialog.Description>
 
             {(() => {
               if (!upgradeDetailsId) {
@@ -4508,8 +4510,7 @@ export function ShipDashboard() {
             <div className="flex gap-1.5 flex-nowrap">
               {[captain].map((c) => {
                 const isReviveTarget = hasPendingRevive && c.id === currentReviveTargetId;
-                const { canSelect: canSelectReviveTarget, blockedReason: reviveBlockedReason } =
-                  getReviveCapacityStatus(c);
+                const { canSelect: canSelectReviveTarget } = getReviveCapacityStatus(c);
 
                 const isStimDoctor = selectedStimmed && c.id === selectedStimDoctorId;
                 const canSelectStimDoctor = false;
@@ -4525,7 +4526,6 @@ export function ShipDashboard() {
                     crew={c}
                     isReviveTarget={isReviveTarget}
                     canSelectReviveTarget={canSelectReviveTarget}
-                    reviveBlockedReason={reviveBlockedReason}
                     onSelectReviveTarget={
                       canSelectReviveTarget && actingReviverId
                         ? () => {
@@ -7143,10 +7143,10 @@ export function ShipDashboard() {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(560px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl z-[101]">
-            <div className="text-sm font-bold tracking-wide">EXPLORER: PLACE REPAIR KIT</div>
-            <div className="mt-2 text-[10px] text-gravity-muted">
+            <Dialog.Title className="text-sm font-bold tracking-wide">EXPLORER: PLACE REPAIR KIT</Dialog.Title>
+            <Dialog.Description className="mt-2 text-[10px] text-gravity-muted">
               Select a damaged ship section to place your special repair kit.
-            </div>
+            </Dialog.Description>
 
             {damagedSectionsForRepairKit.length === 0 ? (
               <div className="mt-3 rounded border border-red-500/30 bg-red-950/20 p-2 text-[10px] text-red-200">
@@ -7182,10 +7182,10 @@ export function ShipDashboard() {
           <Dialog.Content
             className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(960px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gravity-border bg-gravity-bg p-8 text-slate-100 shadow-2xl z-[101]"
           >
-            <div className="text-2xl font-extrabold tracking-wide">SPACE PIRATE: CHOOSE STARTING UPGRADE</div>
-            <div className="mt-4 text-[20px] leading-snug text-gravity-muted">
+            <Dialog.Title className="text-2xl font-extrabold tracking-wide">SPACE PIRATE: CHOOSE STARTING UPGRADE</Dialog.Title>
+            <Dialog.Description className="mt-4 text-[20px] leading-snug text-gravity-muted">
               Choose one upgrade to add to your ship’s pending upgrades.
-            </div>
+            </Dialog.Description>
 
             <div className="mt-6 space-y-4">
               {(player.spacePirateStartingUpgradeOptions ?? []).map((upgrade) => (
@@ -7262,7 +7262,7 @@ export function ShipDashboard() {
           <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[100]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[min(640px,95vw)] -translate-x-1/2 -translate-y-1/2 rounded border border-gravity-border bg-gravity-bg p-4 text-slate-100 shadow-xl z-[101]">
             <div className="flex items-start justify-between gap-2">
-              <div className="text-sm font-bold tracking-wide">UPGRADES</div>
+              <Dialog.Title className="text-sm font-bold tracking-wide">UPGRADES</Dialog.Title>
               <Dialog.Close asChild>
                 <button
                   type="button"
@@ -7273,9 +7273,9 @@ export function ShipDashboard() {
               </Dialog.Close>
             </div>
 
-            <div className="mt-2 text-[10px] text-gravity-muted">
+            <Dialog.Description className="mt-2 text-[10px] text-gravity-muted">
               {selectedCrew ? `Planning for: ${selectedCrew.name}` : 'Select a crew member to plan an installation.'}
-            </div>
+            </Dialog.Description>
 
             <div className="mt-3 grid grid-cols-1 gap-3">
               <div className="rounded border border-gravity-border bg-slate-900/30 p-2">

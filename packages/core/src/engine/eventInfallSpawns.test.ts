@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AnyCrew, Captain } from '../models/Crew';
 import type { GameSettings } from '../models/Game';
+import { BoardUtils } from '../models';
 import { SHIP_SECTIONS } from '../constants/GameConfig';
 import { addPlayerToGame, applyEventPhase, createInitialShip, createNewGame, startGame } from './index';
 
@@ -60,6 +61,15 @@ function createGameWithPlayers(params: { gameId: string; playerCount: number }) 
   game = startGame(game, { startedAt: createdAt });
 
   return game;
+}
+
+function getMinimumDistanceToShips(game: ReturnType<typeof createGameWithPlayers>, ring: number, space: number): number {
+  const position = { ring, space };
+  const shipPositions = Array.from(game.players.values()).map((player) => player.ship.position);
+
+  return Math.min(
+    ...shipPositions.map((shipPosition) => BoardUtils.calculateDistance(position, shipPosition, game.board)),
+  );
 }
 
 describe('event infall object spawns', () => {
@@ -131,22 +141,32 @@ describe('event infall object spawns', () => {
 
     const outerRing = after.board.rings[7];
     expect(outerRing).toBeTruthy();
-    const numSpaces = outerRing!.numSpaces;
 
     const spaces = after.board.objects.map(obj => obj.position.space);
     const unique = new Set(spaces);
     expect(unique.size).toBe(spaces.length);
 
-    const isAdjacent = (a: number, b: number): boolean => {
-      const diff = Math.abs(a - b);
-      return diff === 1 || diff === numSpaces - 1;
-    };
+    const availableDistances: number[] = [];
+    for (let space = 0; space < outerRing!.numSpaces; space += 1) {
+      const occupiedByShip = Array.from(started.players.values()).some(
+        (player) => player.ship.position.ring === outerRing!.index && player.ship.position.space === space,
+      );
 
-    for (let i = 0; i < spaces.length; i += 1) {
-      for (let j = i + 1; j < spaces.length; j += 1) {
-        expect(isAdjacent(spaces[i]!, spaces[j]!)).toBe(false);
+      if (occupiedByShip) {
+        continue;
       }
+
+      availableDistances.push(getMinimumDistanceToShips(started, outerRing!.index, space));
     }
+
+    const selectedDistances = after.board.objects
+      .map((obj) => getMinimumDistanceToShips(started, obj.position.ring, obj.position.space))
+      .sort((left, right) => right - left);
+    const bestAvailableDistances = [...availableDistances]
+      .sort((left, right) => right - left)
+      .slice(0, selectedDistances.length);
+
+    expect(selectedDistances).toEqual(bestAvailableDistances);
   });
 
   it('scales spawn count with playerCount', () => {
@@ -183,6 +203,73 @@ describe('event infall object spawns', () => {
       const key = `${obj.position.ring}:${obj.position.space}`;
       expect(shipPositions.has(key)).toBe(false);
     }
+  });
+
+  it('uses post-event ship positions when selecting infall spawn spaces', () => {
+    const started = createGameWithPlayers({ gameId: 'event-infall-after-player-flux', playerCount: 2 });
+
+    const game = {
+      ...started,
+      currentTurn: 4,
+      eventDeck: [
+        {
+          id: 'event_gravity_flux_players_forward',
+          name: 'Gravity Flux',
+          description: 'Move players forward',
+          effects: { kind: 'gravity_flux_players_forward' },
+        },
+      ],
+    };
+
+    const after = applyEventPhase(game);
+
+    const shipPositions = new Set(
+      Array.from(after.players.values()).map(player => `${player.ship.position.ring}:${player.ship.position.space}`),
+    );
+
+    for (const obj of after.board.objects) {
+      const key = `${obj.position.ring}:${obj.position.space}`;
+      expect(shipPositions.has(key)).toBe(false);
+    }
+  });
+
+  it('places the infall hazard at the maximum available distance from ships on the outer ring', () => {
+    const started = createGameWithPlayers({ gameId: 'event-infall-hazard-distance', playerCount: 2 });
+
+    const game = {
+      ...started,
+      currentTurn: 4,
+      eventDeck: [],
+    };
+
+    const after = applyEventPhase(game);
+    const hazard = after.board.objects.find((obj) => obj.type === 'hazard');
+
+    expect(hazard).toBeTruthy();
+
+    const outerRing = started.board.rings[started.board.rings.length - 1];
+    expect(outerRing).toBeTruthy();
+
+    const candidateDistances: number[] = [];
+    for (let space = 0; space < outerRing!.numSpaces; space += 1) {
+      const occupiedByShip = Array.from(started.players.values()).some(
+        (player) => player.ship.position.ring === outerRing!.index && player.ship.position.space === space,
+      );
+
+      if (occupiedByShip) {
+        continue;
+      }
+
+      candidateDistances.push(getMinimumDistanceToShips(started, outerRing!.index, space));
+    }
+
+    const hazardDistance = getMinimumDistanceToShips(
+      after as ReturnType<typeof createGameWithPlayers>,
+      hazard!.position.ring,
+      hazard!.position.space,
+    );
+
+    expect(hazardDistance).toBe(Math.max(...candidateDistances));
   });
 
   it('gravity flux object movement never lands on a player ship', () => {

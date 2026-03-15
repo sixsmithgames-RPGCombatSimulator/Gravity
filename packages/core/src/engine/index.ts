@@ -309,96 +309,85 @@ function assignLootToBoardIfMissing(game: GameState): GameState {
   };
 }
 
-function pickRandomFromSet<T>(items: Set<T>, rng: () => number): T {
-  if (items.size <= 0) {
-    throw new Error(
-      'Cannot pick random item from empty set. ' +
-      'Root cause: items.size is 0. ' +
-      'Fix: Ensure the set has at least one item before calling pickRandomFromSet.'
-    );
-  }
+function getShipPositionsOnBoard(game: GameState): ShipPosition[] {
+  const shipPositions: ShipPosition[] = [];
 
-  const targetIndex = Math.floor(rng() * items.size);
-  let currentIndex = 0;
-
-  for (const item of items) {
-    if (currentIndex === targetIndex) {
-      return item;
+  for (const player of game.players.values()) {
+    if (!BoardUtils.isValidPosition(player.ship.position, game.board)) {
+      continue;
     }
-    currentIndex += 1;
+
+    shipPositions.push(player.ship.position);
   }
 
-  throw new Error(
-    'Cannot pick random item from set because iteration did not yield an item. ' +
-    `Root cause: items.size=${items.size}, targetIndex=${targetIndex}. ` +
-    'Fix: Ensure the set is not mutated during iteration.'
-  );
+  return shipPositions;
 }
 
-function pickSpreadPositionsOnRing(
-  ringPositions: ShipPosition[],
-  numSpaces: number,
+function getMinimumDistanceToPositions(
+  position: ShipPosition,
+  otherPositions: readonly ShipPosition[],
+  board: Board,
+): number {
+  if (otherPositions.length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let minimumDistance = Number.POSITIVE_INFINITY;
+
+  for (const otherPosition of otherPositions) {
+    const distance = BoardUtils.calculateDistance(position, otherPosition, board);
+    if (distance < minimumDistance) {
+      minimumDistance = distance;
+    }
+  }
+
+  return minimumDistance;
+}
+
+function pickPreferredSpawnPositions(
+  candidatePositions: ShipPosition[],
   count: number,
+  board: Board,
+  shipPositions: readonly ShipPosition[],
   rng: () => number,
 ): ShipPosition[] {
-  if (count <= 0 || ringPositions.length === 0) {
+  if (count <= 0 || candidatePositions.length === 0) {
     return [];
   }
 
-  const spaceToPosition = new Map<number, ShipPosition>();
-  const allSpaces: number[] = [];
+  const remaining = [...candidatePositions];
+  shuffleInPlaceWithRng(remaining, rng);
 
-  for (const pos of ringPositions) {
-    spaceToPosition.set(pos.space, pos);
-    allSpaces.push(pos.space);
-  }
-
-  const availableNonAdjacent = new Set<number>(allSpaces);
-  const selectedSpaces = new Set<number>();
   const selected: ShipPosition[] = [];
 
-  while (selected.length < count && availableNonAdjacent.size > 0) {
-    const space = pickRandomFromSet(availableNonAdjacent, rng);
-    availableNonAdjacent.delete(space);
-    selectedSpaces.add(space);
+  while (selected.length < count && remaining.length > 0) {
+    let bestIndex = 0;
+    let bestShipDistance = -1;
+    let bestSelectedDistance = -1;
 
-    const position = spaceToPosition.get(space);
-    if (position) {
-      selected.push(position);
+    for (let index = 0; index < remaining.length; index += 1) {
+      const candidate = remaining[index];
+      const shipDistance = getMinimumDistanceToPositions(candidate, shipPositions, board);
+      const selectedDistance = selected.length === 0
+        ? Number.POSITIVE_INFINITY
+        : getMinimumDistanceToPositions(candidate, selected, board);
+
+      if (
+        shipDistance > bestShipDistance ||
+        (shipDistance === bestShipDistance && selectedDistance > bestSelectedDistance)
+      ) {
+        bestIndex = index;
+        bestShipDistance = shipDistance;
+        bestSelectedDistance = selectedDistance;
+      }
     }
 
-    const remainingNeeded = count - selected.length;
-    const neighbors = [
-      (space - 1 + numSpaces) % numSpaces,
-      (space + 1) % numSpaces,
-    ];
-
-    for (const neighbor of neighbors) {
-      if (!availableNonAdjacent.has(neighbor)) {
-        continue;
-      }
-      if (availableNonAdjacent.size - 1 < remainingNeeded) {
-        continue;
-      }
-      availableNonAdjacent.delete(neighbor);
-    }
-  }
-
-  if (selected.length >= count) {
-    return selected;
-  }
-
-  const remainingSpaces = allSpaces.filter(space => !selectedSpaces.has(space));
-  shuffleInPlaceWithRng(remainingSpaces, rng);
-
-  for (const space of remainingSpaces) {
-    if (selected.length >= count) {
+    const picked = remaining.splice(bestIndex, 1)[0];
+    if (!picked) {
       break;
     }
-    const position = spaceToPosition.get(space);
-    if (position) {
-      selected.push(position);
-    }
+
+    selected.push(picked);
   }
 
   return selected;
@@ -409,7 +398,7 @@ function pickInfallSpawnPositions(game: GameState, rng: () => number, requestedS
     return [];
   }
 
-  const players = Array.from(game.players.values());
+  const shipPositions = getShipPositionsOnBoard(game);
   const results: ShipPosition[] = [];
 
   for (let ringIndex = game.board.rings.length; ringIndex >= 1; ringIndex -= 1) {
@@ -433,9 +422,9 @@ function pickInfallSpawnPositions(game: GameState, rng: () => number, requestedS
         continue;
       }
 
-      const hasShip = players.some(player =>
-        player.ship.position.ring === position.ring &&
-        player.ship.position.space === position.space,
+      const hasShip = shipPositions.some(shipPosition =>
+        shipPosition.ring === position.ring &&
+        shipPosition.space === position.space,
       );
 
       if (hasShip) {
@@ -455,7 +444,7 @@ function pickInfallSpawnPositions(game: GameState, rng: () => number, requestedS
     }
 
     const takeCount = Math.min(remainingNeeded, ringPositions.length);
-    const picked = pickSpreadPositionsOnRing(ringPositions, ring.numSpaces, takeCount, rng);
+    const picked = pickPreferredSpawnPositions(ringPositions, takeCount, game.board, shipPositions, rng);
     results.push(...picked);
 
     if (results.length >= requestedSpawnCount) {
@@ -498,11 +487,7 @@ function applyInfallObjectSpawns(game: GameState): GameState {
 
   const newObjects: AnySpaceObject[] = [];
 
-  // Always include exactly one hazard
-  const shuffledPositions = [...safeSpawnPositions];
-  shuffleInPlaceWithRng(shuffledPositions, rng);
-
-  shuffledPositions.forEach((position, index) => {
+  safeSpawnPositions.forEach((position, index) => {
     const type = index === 0 ? 'hazard' : pickWeightedInfallSpawnObjectType(rng);
 
     const object: AnySpaceObject = {
@@ -7808,12 +7793,11 @@ export function generateAllBotActions(game: GameState): TurnActions {
 
   return botActions;
 }
-
 export function applyEventPhase(game: GameState): GameState {
   if (game.status !== 'in_progress') {
     throw new Error(
       'Cannot apply event phase for a game that is not in progress. ' +
-      `Root cause: game status is "${game.status}". ` +
+        `Root cause: game status is "${game.status}". ` +
       'Fix: Only call applyEventPhase when game.status is "in_progress".'
     );
   }
@@ -7831,19 +7815,17 @@ export function applyEventPhase(game: GameState): GameState {
     return game;
   }
 
-  const afterSpawns = applyInfallObjectSpawns(game);
-
-  if (afterSpawns.eventDeck.length === 0) {
-    return afterSpawns;
+  if (game.eventDeck.length === 0) {
+    return applyInfallObjectSpawns(game);
   }
 
-  const [topCard, ...remainingDeck] = afterSpawns.eventDeck;
+  const [topCard, ...remainingDeck] = game.eventDeck;
 
-  // Apply event effects based on the card's configured kind
-  const afterEffects = applyEventEffects(afterSpawns, topCard);
+  const afterEffects = applyEventEffects(game, topCard);
+  const afterSpawns = applyInfallObjectSpawns(afterEffects);
 
   return {
-    ...afterEffects,
+    ...afterSpawns,
     eventDeck: remainingDeck,
     lastResolvedEvent: topCard,
   };
@@ -7921,8 +7903,13 @@ function applyDistressCallEvent(game: GameState): GameState {
     return game;
   }
 
-  const index = game.currentTurn % emptyPositions.length;
-  const position = emptyPositions[index];
+  const shipPositions = getShipPositionsOnBoard(game);
+  const rng = createSeededRng(`event_distress_call:${game.id}:${game.currentTurn}`);
+  const position = pickPreferredSpawnPositions(emptyPositions, 1, game.board, shipPositions, rng)[0];
+
+  if (!position) {
+    return game;
+  }
 
   const stationId = `event-station-${game.currentTurn}-${position.ring}-${position.space}`;
 
@@ -7975,12 +7962,17 @@ function applyHazardsAddD3Event(game: GameState): GameState {
   const raw = (game.currentTurn % 3) + 1; // 1-3
   const hazardCount = Math.min(raw, emptyPositions.length);
 
-  const step = Math.max(1, Math.floor(emptyPositions.length / hazardCount));
+  const shipPositions = getShipPositionsOnBoard(game);
+  const rng = createSeededRng(`event_hazards_add_d3:${game.id}:${game.currentTurn}`);
+  const hazardPositions = pickPreferredSpawnPositions(emptyPositions, hazardCount, game.board, shipPositions, rng);
   const newHazards: AnySpaceObject[] = [];
 
-  for (let index = 0; index < hazardCount; index += 1) {
-    const positionIndex = (index * step) % emptyPositions.length;
-    const position = emptyPositions[positionIndex];
+  for (let index = 0; index < hazardPositions.length; index += 1) {
+    const position = hazardPositions[index];
+
+    if (!position) {
+      continue;
+    }
 
     const hazard: AnySpaceObject = {
       id: `event-hazard-${game.currentTurn}-${index}`,
