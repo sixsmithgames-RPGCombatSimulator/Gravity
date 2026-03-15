@@ -82,7 +82,7 @@ export function createMockGame(difficulty: Difficulty): GameState {
     id: botId,
     userId: null,
     isBot: true,
-    botStrategy: 'survival',
+    botStrategy: 'default',
     ship: botShip,
     crew: botCrew,
     captain: botCaptain,

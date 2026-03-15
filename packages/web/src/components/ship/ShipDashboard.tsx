@@ -4063,6 +4063,17 @@ export function ShipDashboard() {
   const selectedLaunchAction = findPlannedAction(selectedCrewId, ui.selectedActionSlot, 'launch');
 
   const selectedRouteAction = findPlannedAction(selectedCrewId, ui.selectedActionSlot, 'route');
+  const selectedTargetObjectId =
+    typeof selectedAction?.target?.objectId === 'string' && selectedAction.target.objectId.length > 0
+      ? selectedAction.target.objectId
+      : null;
+  const selectedTargetDiscovery =
+    selectedTargetObjectId !== null
+      ? (player.scanDiscoveriesByObjectId?.[selectedTargetObjectId] ?? null)
+      : null;
+  const selectedTargetHasAcquirableLoot =
+    !!selectedTargetDiscovery &&
+    (selectedTargetDiscovery.foundResource || selectedTargetDiscovery.foundUpgrade);
 
   const selectedStimmed = (selectedAction?.parameters as any)?.stimmed === true;
   const selectedStimDoctorId = (selectedAction?.parameters as any)?.stimDoctorId as string | undefined;
@@ -4779,6 +4790,7 @@ export function ShipDashboard() {
 
         const pendingUpgradesGained = diff.pendingUpgradesGained ?? [];
         const installedUpgradesGained = diff.installedUpgradesGained ?? [];
+        const newScanDiscoveries = diff.newScanDiscoveries ?? [];
 
         const hasAnyChanges =
           diff.shieldsDelta !== 0 ||
@@ -4786,7 +4798,8 @@ export function ShipDashboard() {
           sectionEntries.length > 0 ||
           resourceEntries.length > 0 ||
           pendingUpgradesGained.length > 0 ||
-          installedUpgradesGained.length > 0;
+          installedUpgradesGained.length > 0 ||
+          newScanDiscoveries.length > 0;
 
         if (!hasAnyChanges) {
           return null;
@@ -4865,6 +4878,35 @@ export function ShipDashboard() {
                       {key} {typeof delta === 'number' ? formatDelta(delta) : String(delta)}
                     </span>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {newScanDiscoveries.length > 0 && (
+              <div className="mt-2">
+                <div className="text-[10px] text-gravity-muted text-center mb-1">Scans</div>
+                <div className="flex flex-col gap-1 text-[10px]">
+                  {newScanDiscoveries.map((discovery) => {
+                    const parts: string[] = [];
+                    if (discovery.foundResource && discovery.resourceType) {
+                      parts.push(`Resource: ${discovery.resourceType}`);
+                    } else {
+                      parts.push('Resource: none');
+                    }
+
+                    if (discovery.foundUpgrade) {
+                      parts.push(`Upgrade: ${discovery.reservedUpgrade?.name ?? 'reserved'}`);
+                    } else {
+                      parts.push('Upgrade: none');
+                    }
+
+                    return (
+                      <div key={`${discovery.objectId}:${discovery.revealedAtTurn}:${discovery.crewId}`} className="flex items-center justify-between gap-2">
+                        <span className="text-gravity-muted">{discovery.objectId}</span>
+                        <span className="text-slate-100 text-right">{parts.join(' · ')}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -5716,6 +5758,66 @@ export function ShipDashboard() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {selectedAction && (selectedAction.type === 'scan' || selectedAction.type === 'acquire') && selectedTargetObjectId && (
+            <div className="mt-2 rounded border border-purple-400/30 bg-purple-950/10 px-2 py-1 text-[10px] text-purple-100">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div>
+                    Target: <span className="font-semibold">{selectedTargetObjectId}</span>
+                  </div>
+                  {selectedTargetHasAcquirableLoot ? (
+                    <div className="mt-1 text-amber-200">
+                      Revealed loot is already available here. You can collect it with Acquire, or keep Scan to search again.
+                    </div>
+                  ) : selectedAction.type === 'acquire' ? (
+                    <div className="mt-1 text-purple-200">
+                      No revealed loot is currently stored here. If the target is still in range when this resolves, Acquire will perform a Scan instead.
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-purple-200">
+                      Scan will reveal what is available here for a later Acquire.
+                    </div>
+                  )}
+                </div>
+                {selectedTargetHasAcquirableLoot && currentPlayerId && (
+                  <button
+                    type="button"
+                    className="shrink-0 px-2 py-1 rounded bg-slate-800 text-slate-100 hover:bg-slate-700"
+                    onClick={() => {
+                      if (!selectedAction || !selectedCrewId) {
+                        return;
+                      }
+                      const nextType = selectedAction.type === 'scan' ? 'acquire' : 'scan';
+                      setExecutionConfirmed(false);
+                      addPlannedAction({
+                        playerId: currentPlayerId,
+                        crewId: selectedCrewId,
+                        type: nextType,
+                        target: selectedAction.target ?? null,
+                        parameters: {
+                          ...(selectedAction.parameters ?? {}),
+                          uiSlot: ui.selectedActionSlot,
+                        },
+                      });
+                    }}
+                  >
+                    Switch to {selectedAction.type === 'scan' ? 'Acquire' : 'Scan'}
+                  </button>
+                )}
+              </div>
+              {selectedTargetDiscovery && (
+                <div className="mt-1 text-gravity-muted">
+                  Stored result: {selectedTargetDiscovery.foundResource && selectedTargetDiscovery.resourceType
+                    ? `resource ${selectedTargetDiscovery.resourceType}`
+                    : 'no resource'}
+                  {selectedTargetDiscovery.foundUpgrade
+                    ? `, upgrade ${selectedTargetDiscovery.reservedUpgrade?.name ?? 'reserved'}`
+                    : ', no upgrade'}
+                </div>
+              )}
             </div>
           )}
 

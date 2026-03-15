@@ -314,6 +314,291 @@ describe('captain abilities', () => {
     expect(totalResources).toBe(2);
   });
 
+  it('Acquire falls back to scan when the target is in range but has no stored discovery yet', () => {
+    const baseGame = createBaseGame();
+
+    const ship = createShipWithPoweredSciLab({ ring: 8, space: 0 });
+
+    const acquirer: AnyCrew = {
+      id: 'crew-acquire-fallback',
+      name: 'Acquirer',
+      type: 'basic',
+      role: 'pilot',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    };
+
+    const otherShip = createShipWithPoweredSciLab({ ring: 8, space: 10 });
+
+    const objectId = 'debris-fallback';
+    const debris: AnySpaceObject = {
+      id: objectId,
+      type: 'debris',
+      position: { ring: 8, space: 1 },
+      lootResourceType: 'spare_parts',
+      lootUpgrade: null,
+      lootRollValue: 4,
+      lootGeneratedAtTurn: 1,
+    };
+
+    const gameWithObject = {
+      ...baseGame,
+      board: {
+        ...baseGame.board,
+        objects: [debris],
+      },
+    };
+
+    const scenario = addTwoPlayersAndStart({
+      game: gameWithObject,
+      playerCaptainType: 'merchant',
+      playerShip: ship,
+      playerCrew: [acquirer],
+      playerCaptainLocation: SHIP_SECTIONS.BRIDGE,
+      otherShip,
+    });
+
+    const acquireAction: PlayerAction = {
+      playerId: scenario.playerId,
+      crewId: acquirer.id,
+      type: 'acquire',
+      target: { objectId },
+    };
+
+    const after = applyPlayerActions(scenario.game, {
+      [scenario.playerId]: [acquireAction],
+      [scenario.otherPlayerId]: [],
+    });
+
+    const player = after.players.get(scenario.playerId);
+    expect(player).toBeDefined();
+    expect(player?.scanDiscoveriesByObjectId?.[objectId]).toMatchObject({
+      objectId,
+      resourceType: 'spare_parts',
+      foundResource: true,
+      source: 'scan',
+    });
+
+    const remainingObject = after.board.objects.find((obj) => obj.id === objectId);
+    expect(remainingObject).toBeTruthy();
+
+    const totalResources = Object.values(player?.resources ?? {}).reduce(
+      (sum, count) => sum + (typeof count === 'number' ? count : 0),
+      0,
+    );
+    expect(totalResources).toBe(0);
+  });
+
+  it('scan then acquire in the same turn uses the fresh scan discovery for the later acquire action', () => {
+    const baseGame = createBaseGame();
+
+    const ship = createShipWithPoweredSciLab({ ring: 8, space: 0 });
+
+    const scanner: AnyCrew = {
+      id: 'crew-scan-sequencing',
+      name: 'Scanner',
+      type: 'basic',
+      role: 'pilot',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    };
+
+    const acquirer: AnyCrew = {
+      id: 'crew-acquire-sequencing',
+      name: 'Acquirer',
+      type: 'basic',
+      role: 'pilot',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    };
+
+    const otherShip = createShipWithPoweredSciLab({ ring: 8, space: 10 });
+
+    const objectId = 'station-sequencing';
+    const station: AnySpaceObject = {
+      id: objectId,
+      type: 'functional_station',
+      position: { ring: 8, space: 1 },
+      hull: 24,
+      shields: 12,
+      lootResourceType: 'fuel_cell',
+      lootUpgrade: null,
+      lootRollValue: 1,
+      lootGeneratedAtTurn: 1,
+    };
+
+    const gameWithObject = {
+      ...baseGame,
+      board: {
+        ...baseGame.board,
+        objects: [station],
+      },
+    };
+
+    const scenario = addTwoPlayersAndStart({
+      game: gameWithObject,
+      playerCaptainType: 'merchant',
+      playerShip: ship,
+      playerCrew: [scanner, acquirer],
+      playerCaptainLocation: SHIP_SECTIONS.BRIDGE,
+      otherShip,
+    });
+
+    const after = applyPlayerActions(scenario.game, {
+      [scenario.playerId]: [
+        {
+          playerId: scenario.playerId,
+          crewId: scanner.id,
+          type: 'scan',
+          target: { objectId },
+        },
+        {
+          playerId: scenario.playerId,
+          crewId: acquirer.id,
+          type: 'acquire',
+          target: { objectId },
+        },
+      ],
+      [scenario.otherPlayerId]: [],
+    });
+
+    const player = after.players.get(scenario.playerId);
+    expect(player).toBeDefined();
+    expect(after.board.objects.find((obj) => obj.id === objectId)).toBeUndefined();
+
+    const totalResources = Object.values(player?.resources ?? {}).reduce(
+      (sum, count) => sum + (typeof count === 'number' ? count : 0),
+      0,
+    );
+    expect(totalResources).toBe(2);
+  });
+
+  it('a later acquire targeting an already-collected object does not throw or grant duplicate rewards', () => {
+    const baseGame = createBaseGame();
+
+    const ship = createShipWithPoweredSciLab({ ring: 8, space: 0 });
+
+    const firstAcquirer: AnyCrew = {
+      id: 'crew-acquire-first',
+      name: 'First Acquirer',
+      type: 'basic',
+      role: 'pilot',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    };
+
+    const secondAcquirer: AnyCrew = {
+      id: 'crew-acquire-second',
+      name: 'Second Acquirer',
+      type: 'basic',
+      role: 'pilot',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    };
+
+    const otherShip = createShipWithPoweredSciLab({ ring: 8, space: 10 });
+
+    const objectId = 'debris-duplicate-acquire';
+    const debris: AnySpaceObject = {
+      id: objectId,
+      type: 'debris',
+      position: { ring: 8, space: 1 },
+      lootResourceType: 'spare_parts',
+      lootUpgrade: null,
+      lootRollValue: 4,
+      lootGeneratedAtTurn: 1,
+    };
+
+    const gameWithObject = {
+      ...baseGame,
+      board: {
+        ...baseGame.board,
+        objects: [debris],
+      },
+    };
+
+    const scenario = addTwoPlayersAndStart({
+      game: gameWithObject,
+      playerCaptainType: 'merchant',
+      playerShip: ship,
+      playerCrew: [firstAcquirer, secondAcquirer],
+      playerCaptainLocation: SHIP_SECTIONS.BRIDGE,
+      otherShip,
+    });
+
+    const seededGame = {
+      ...scenario.game,
+      players: new Map(scenario.game.players),
+    };
+
+    const seededPlayer = seededGame.players.get(scenario.playerId)!;
+    seededGame.players.set(scenario.playerId, {
+      ...seededPlayer,
+      scanDiscoveriesByObjectId: {
+        ...(seededPlayer.scanDiscoveriesByObjectId ?? {}),
+        [objectId]: {
+          objectId,
+          objectType: 'debris',
+          source: 'scan',
+          rollValue: 4,
+          totalRoll: 4,
+          foundResource: true,
+          resourceType: 'spare_parts',
+          foundUpgrade: false,
+          reservedUpgrade: null,
+          revealedAtTurn: seededGame.currentTurn,
+          crewId: firstAcquirer.id,
+        },
+      },
+    });
+
+    const after = applyPlayerActions(seededGame, {
+      [scenario.playerId]: [
+        {
+          playerId: scenario.playerId,
+          crewId: firstAcquirer.id,
+          type: 'acquire',
+          target: { objectId },
+        },
+        {
+          playerId: scenario.playerId,
+          crewId: secondAcquirer.id,
+          type: 'acquire',
+          target: { objectId },
+        },
+      ],
+      [scenario.otherPlayerId]: [],
+    });
+
+    const player = after.players.get(scenario.playerId);
+    expect(player).toBeDefined();
+    expect(after.board.objects.find((obj) => obj.id === objectId)).toBeUndefined();
+
+    const spareParts = player?.resources.spare_parts ?? 0;
+    const totalResources = Object.values(player?.resources ?? {}).reduce(
+      (sum, count) => sum + (typeof count === 'number' ? count : 0),
+      0,
+    );
+
+    expect(spareParts).toBe(1);
+    expect(totalResources).toBe(2);
+  });
+
   it('Technologist: fully powered Sci-Lab grants +3 scan range', () => {
     const baseGame = createBaseGame();
 

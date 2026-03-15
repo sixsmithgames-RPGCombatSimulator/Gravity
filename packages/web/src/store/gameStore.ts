@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  ConsoleBotLogger,
   processTurn,
   generateAllBotActions as generateAllBotActionsFromEngine,
   CrewUtils,
@@ -11,10 +12,13 @@ import {
 import type {
   AnyCrew,
   Board,
+  BotLogLevel,
+  EngineInstrumentationOptions,
   GameState,
   PlayerAction,
   PlayerState,
   ResourceType,
+  ScanDiscoveryRecord,
   ShipSection,
   TurnPhase,
   TurnActions,
@@ -23,6 +27,35 @@ import type {
 } from '@gravity/core';
 import { createMockGame, type Difficulty } from '../utils/mockGame';
 import { getUpgradePowerStatus } from '../utils/upgradePower';
+
+const BOT_EXECUTION_ENABLED = true;
+const BOT_LOG_LEVEL: BotLogLevel = import.meta.env.DEV ? 'verbose' : 'off';
+const BOT_CONSOLE_LOGGER = new ConsoleBotLogger();
+
+function getBotInstrumentationOptions(): EngineInstrumentationOptions | undefined {
+  if (BOT_LOG_LEVEL === 'off') {
+    return undefined;
+  }
+
+  return {
+    logger: BOT_CONSOLE_LOGGER,
+    logLevel: BOT_LOG_LEVEL,
+  };
+}
+
+function getDisabledBotActions(game: GameState): TurnActions {
+  const disabledBotActions: TurnActions = {};
+
+  for (const player of game.players.values()) {
+    if (!player.isBot || player.status !== 'active') {
+      continue;
+    }
+
+    disabledBotActions[player.id] = [];
+  }
+
+  return disabledBotActions;
+}
 
 /**
  * Compute the total life support capacity for a player.
@@ -259,6 +292,7 @@ export type PlayerDiff = {
   resourceDiffs: Partial<Record<ResourceType, number>>;
   pendingUpgradesGained: UpgradeCard[];
   installedUpgradesGained: UpgradeCard[];
+  newScanDiscoveries: ScanDiscoveryRecord[];
 };
 
 function computePlayerDiff(params: {
@@ -342,6 +376,25 @@ function computePlayerDiff(params: {
   const prevInstalledUpgradeIds = new Set((prevPlayer.installedUpgrades ?? []).map((u) => u.id));
   const installedUpgradesGained = (nextPlayer.installedUpgrades ?? []).filter((u) => !prevInstalledUpgradeIds.has(u.id));
 
+  const previousDiscoveries = prevPlayer.scanDiscoveriesByObjectId ?? {};
+  const nextDiscoveries = nextPlayer.scanDiscoveriesByObjectId ?? {};
+  const newScanDiscoveries = Object.values(nextDiscoveries).filter((discovery) => {
+    const previous = previousDiscoveries[discovery.objectId];
+    if (!previous) {
+      return true;
+    }
+
+    return (
+      previous.revealedAtTurn !== discovery.revealedAtTurn ||
+      previous.rollValue !== discovery.rollValue ||
+      previous.totalRoll !== discovery.totalRoll ||
+      previous.foundResource !== discovery.foundResource ||
+      previous.resourceType !== discovery.resourceType ||
+      previous.foundUpgrade !== discovery.foundUpgrade ||
+      previous.reservedUpgrade?.id !== discovery.reservedUpgrade?.id
+    );
+  });
+
   return {
     fromTurn: params.prevGame.currentTurn,
     fromPhase: params.prevGame.turnPhase,
@@ -353,6 +406,7 @@ function computePlayerDiff(params: {
     resourceDiffs,
     pendingUpgradesGained,
     installedUpgradesGained,
+    newScanDiscoveries,
   };
 }
 
@@ -995,15 +1049,11 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
         [currentPlayerId]: ui.plannedActions,
       };
 
-      const shouldDisableBotActions = true;
-      const botActions: TurnActions = shouldDisableBotActions
-        ? Array.from(game.players.values()).reduce<TurnActions>((acc, player) => {
-            if (player.isBot && player.status === 'active') {
-              acc[player.id] = [];
-            }
-            return acc;
-          }, {})
-        : generateAllBotActionsFromEngine(game);
+      const botInstrumentationOptions = getBotInstrumentationOptions();
+      const shouldExecuteBotActions = BOT_EXECUTION_ENABLED && game.turnPhase === 'action_execution';
+      const botActions: TurnActions = shouldExecuteBotActions
+        ? generateAllBotActionsFromEngine(game, botInstrumentationOptions)
+        : getDisabledBotActions(game);
       const actionsByPlayer: TurnActions = { ...botActions, ...humanActions };
 
       let workingGame: GameState = game;
@@ -1012,13 +1062,13 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
       const previousLastEventId = game.lastResolvedEvent?.id ?? null;
 
       if (game.turnPhase === 'action_planning') {
-        workingGame = processTurn(game, actionsByPlayer);
+        workingGame = processTurn(game, actionsByPlayer, botInstrumentationOptions);
         nextUI = {
           ...nextUI,
           executionConfirmed: false,
         };
       } else if (game.turnPhase === 'action_execution') {
-        workingGame = processTurn(game, actionsByPlayer);
+        workingGame = processTurn(game, actionsByPlayer, botInstrumentationOptions);
         nextUI = {
           ...ui,
           plannedActions: [],
@@ -1034,7 +1084,7 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
           rotationDirection: game.board.rotationDirection,
         };
 
-        workingGame = processTurn(game, actionsByPlayer);
+        workingGame = processTurn(game, actionsByPlayer, botInstrumentationOptions);
 
         nextUI = {
           ...nextUI,
@@ -1043,7 +1093,7 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
           ringAnimationProgress: 0,
         };
       } else {
-        workingGame = processTurn(game, actionsByPlayer);
+        workingGame = processTurn(game, actionsByPlayer, botInstrumentationOptions);
       }
 
       const newLastEventId = workingGame.lastResolvedEvent?.id ?? null;

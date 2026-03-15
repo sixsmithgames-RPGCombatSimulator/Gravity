@@ -54,6 +54,28 @@ import {
   POWER_CONFIG,
   LIFE_SUPPORT_CONFIG,
 } from '../constants';
+import { getBotStrategyForPlayer } from './bot/BotStrategyRegistry';
+import { buildBotActionResolutionLogEvent } from './logging/ActionResolutionDetails';
+import {
+  logActionResolutionIfEnabled,
+  logTurnSummaryIfEnabled,
+  type EngineInstrumentationOptions as EngineInstrumentationOptionsInternal,
+} from './logging/EngineInstrumentation';
+
+export type {
+  BotActionResolutionLogEvent,
+  BotDecisionLogEvent,
+  BotLogger,
+  BotWarningLogEvent,
+  TurnSummaryHostileStatus,
+  TurnSummaryLogEvent,
+  TurnSummaryPlayerStatus,
+  TurnSummarySectionStatus,
+} from './logging/BotLogger';
+export { ConsoleBotLogger } from './logging/ConsoleBotLogger';
+export { DEFAULT_BOT_LOG_LEVEL, type BotLogLevel } from './logging/EngineInstrumentation';
+export type { EngineInstrumentationOptions } from './logging/EngineInstrumentation';
+export { NOOP_BOT_LOGGER } from './logging/NoopBotLogger';
 
 const BASIC_RESOURCE_TYPES = [
   'fuel_cell',
@@ -1860,6 +1882,7 @@ export function advanceTurn(game: GameState): GameState {
 export function applyPlayerActions(
   game: GameState,
   actionsByPlayer: TurnActions,
+  options?: EngineInstrumentationOptionsInternal,
 ): GameState {
   if (game.status !== 'in_progress') {
     throw new Error(
@@ -2071,7 +2094,21 @@ export function applyPlayerActions(
     );
 
     // Resolve all actions of this type simultaneously
-    currentGame = resolveActionsOfType(currentGame, actionType, sortedActionsOfType);
+    const nextGame = resolveActionsOfType(currentGame, actionType, sortedActionsOfType);
+
+    for (const { playerId, action } of sortedActionsOfType) {
+      const player = currentGame.players.get(playerId);
+      if (!player || !player.isBot) {
+        continue;
+      }
+
+      logActionResolutionIfEnabled(
+        buildBotActionResolutionLogEvent(currentGame, nextGame, playerId, action),
+        options,
+      );
+    }
+
+    currentGame = nextGame;
   }
 
   return currentGame;
@@ -4580,6 +4617,159 @@ function findCrewById(player: PlayerState, crewId: string): AnyCrew | Captain | 
   return player.crew.find(c => c.id === crewId);
 }
 
+function getBoardActionMaxRange(
+  player: PlayerState,
+  crew: AnyCrew | Captain,
+  actingSection: ShipSection,
+): number {
+  const sciLabFullyPoweredAtStart = ShipUtils.isFullyPowered(player.ship, SHIP_SECTIONS.SCI_LAB);
+
+  let maxRange = 1;
+  const sciLabRangeBonus = sciLabFullyPoweredAtStart
+    ? (player.captain.captainType === 'technologist' ? 3 : 2)
+    : 0;
+  maxRange += sciLabRangeBonus;
+
+  const scanRangeBonus = getScanRangeBonus(crew);
+  maxRange += scanRangeBonus;
+
+  if (player.captain.captainType === 'technologist' && crew.type === 'basic' && scanRangeBonus > 0) {
+    maxRange += 1;
+  }
+
+  if (actingSection === SHIP_SECTIONS.BRIDGE && playerHasPoweredUpgrade(player, player.ship, 'neutron_calibrator')) {
+    maxRange += 1;
+  }
+
+  return maxRange;
+}
+
+function buildScanDiscoveryRecord(
+  scanTarget: AnySpaceObject,
+  currentTurn: number,
+  crewId: string,
+): ScanDiscoveryRecord {
+  const lootResourceTypeRaw = (scanTarget as any).lootResourceType;
+  const lootUpgradeRaw = (scanTarget as any).lootUpgrade;
+  const lootRollValueRaw = (scanTarget as any).lootRollValue;
+
+  const rollValue = typeof lootRollValueRaw === 'number' && Number.isFinite(lootRollValueRaw)
+    ? lootRollValueRaw
+    : 0;
+
+  const totalRoll = rollValue;
+  const hasLootUpgrade = !!lootUpgradeRaw;
+  const reservedUpgrade: UpgradeCard | null = hasLootUpgrade ? (lootUpgradeRaw as UpgradeCard) : null;
+  const resourceType = (() => {
+    const hasLootResource = typeof lootResourceTypeRaw === 'string' && lootResourceTypeRaw.length > 0;
+    if (!hasLootResource) {
+      return null;
+    }
+    if (!BASIC_RESOURCE_TYPES.includes(lootResourceTypeRaw as BasicResourceType)) {
+      return null;
+    }
+    return lootResourceTypeRaw as BasicResourceType;
+  })();
+
+  return {
+    objectId: scanTarget.id,
+    objectType: scanTarget.type,
+    source: 'scan',
+    rollValue,
+    totalRoll,
+    foundResource: resourceType !== null,
+    resourceType,
+    foundUpgrade: hasLootUpgrade,
+    reservedUpgrade,
+    revealedAtTurn: currentTurn,
+    crewId,
+  } satisfies ScanDiscoveryRecord;
+}
+
+function applyScanResultsForTargets(params: {
+  player: PlayerState;
+  scanTargets: AnySpaceObject[];
+  updatedObjects: AnySpaceObject[];
+  eventState: GameState['eventState'];
+  currentTurn: number;
+  crewId: string;
+  playerId: string;
+}): {
+  player: PlayerState;
+  updatedObjects: AnySpaceObject[];
+  eventState: GameState['eventState'];
+} {
+  let workingPlayer = params.player;
+  let updatedObjects = params.updatedObjects;
+  let eventState = params.eventState;
+
+  for (const scanTarget of params.scanTargets) {
+    if (scanTarget.type === 'hostile_ship') {
+      const scannedHostiles = {
+        ...(workingPlayer.scannedHostiles ?? {}),
+        [scanTarget.id]: params.currentTurn,
+      };
+
+      workingPlayer = {
+        ...workingPlayer,
+        scannedHostiles,
+      };
+    }
+
+    const distressState = eventState?.distressCall;
+    const isDistressStation =
+      distressState &&
+      distressState.stationId === scanTarget.id &&
+      (!distressState.claimedByPlayerId || distressState.claimedByPlayerId === null);
+
+    if (isDistressStation) {
+      const objectIndex = updatedObjects.findIndex((obj) => obj.id === scanTarget.id);
+      const station = objectIndex >= 0 ? updatedObjects[objectIndex] : null;
+      const stationUpgrade = station ? (station as any).lootUpgrade : null;
+
+      if (stationUpgrade) {
+        workingPlayer = {
+          ...workingPlayer,
+          pendingUpgrades: [...workingPlayer.pendingUpgrades, stationUpgrade],
+        };
+
+        updatedObjects[objectIndex] = {
+          ...station,
+          lootUpgrade: null,
+        } as AnySpaceObject;
+      }
+
+      eventState = {
+        ...(eventState ?? {}),
+        distressCall: {
+          stationId: distressState!.stationId,
+          claimedByPlayerId: params.playerId,
+        },
+      };
+    }
+  }
+
+  const refreshedScanTargets = params.scanTargets.map(
+    (target) => updatedObjects.find((obj) => obj.id === target.id) ?? target,
+  );
+
+  const discoveries = { ...(workingPlayer.scanDiscoveriesByObjectId ?? {}) };
+  for (const scanTarget of refreshedScanTargets) {
+    discoveries[scanTarget.id] = buildScanDiscoveryRecord(scanTarget, params.currentTurn, params.crewId);
+  }
+
+  workingPlayer = {
+    ...workingPlayer,
+    scanDiscoveriesByObjectId: discoveries,
+  };
+
+  return {
+    player: workingPlayer,
+    updatedObjects,
+    eventState,
+  };
+}
+
  function playerHasInstalledUpgrade(player: PlayerState, upgradeId: string): boolean {
    return player.installedUpgrades.some((upgrade) => upgrade.id === upgradeId);
  }
@@ -5687,9 +5877,6 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
     const actingSection = requireCrewLocationForAction(crew, 'scan', action.crewId);
     requireActingSectionPoweredAndIntact(workingPlayer.ship, actingSection, 'scan', action.crewId);
 
-    // Section_Bonus: Science Lab fully powered grants +2 (or +3 technologist) scan range.(source)
-    const sciLabFullyPoweredAtStart = ShipUtils.isFullyPowered(workingPlayer.ship, SHIP_SECTIONS.SCI_LAB);
-
     const stimResult = consumeStimPackIfRequested(workingPlayer, action, crew, actingSection);
     workingPlayer = stimResult.player;
 
@@ -5716,23 +5903,7 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
 
     // Check range
     const distance = BoardUtils.calculateDistance(workingPlayer.ship.position, targetObject.position, game.board);
-    let maxRange = 1; // Adjacent
-
-    const sciLabRangeBonus = sciLabFullyPoweredAtStart
-      ? (workingPlayer.captain.captainType === 'technologist' ? 3 : 2)
-      : 0;
-    maxRange += sciLabRangeBonus;
-
-    // Crew bonus (Scientist/Senior Scientist)
-    const scanRangeBonus = getScanRangeBonus(crew);
-    maxRange += scanRangeBonus;
-    if (workingPlayer.captain.captainType === 'technologist' && crew.type === 'basic' && scanRangeBonus > 0) {
-      maxRange += 1;
-    }
-
-    if (actingSection === SHIP_SECTIONS.BRIDGE && playerHasPoweredUpgrade(workingPlayer, workingPlayer.ship, 'neutron_calibrator')) {
-      maxRange += 1;
-    }
+    const maxRange = getBoardActionMaxRange(workingPlayer, crew, actingSection);
 
     if (distance > maxRange) {
       throw new Error(
@@ -5797,104 +5968,23 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
       scanTargets.push(secondaryObject);
     }
 
-    for (const scanTarget of scanTargets) {
-      if (scanTarget.type === 'hostile_ship') {
-        const scannedHostiles = {
-          ...(workingPlayer.scannedHostiles ?? {}),
-          [scanTarget.id]: game.currentTurn,
-        };
-
-        workingPlayer = {
-          ...workingPlayer,
-          scannedHostiles,
-        };
-      }
-
-      const distressState = eventState?.distressCall;
-      const isDistressStation =
-        distressState &&
-        distressState.stationId === scanTarget.id &&
-        (!distressState.claimedByPlayerId || distressState.claimedByPlayerId === null);
-
-      if (isDistressStation) {
-        const objectIndex = updatedObjects.findIndex((obj) => obj.id === scanTarget.id);
-        const station = objectIndex >= 0 ? updatedObjects[objectIndex] : null;
-        const stationUpgrade = station ? (station as any).lootUpgrade : null;
-
-        if (stationUpgrade) {
-          workingPlayer = {
-            ...workingPlayer,
-            pendingUpgrades: [...workingPlayer.pendingUpgrades, stationUpgrade],
-          };
-
-          updatedObjects[objectIndex] = {
-            ...station,
-            lootUpgrade: null,
-          } as AnySpaceObject;
-        }
-
-        eventState = {
-          ...(eventState ?? {}),
-          distressCall: {
-            stationId: distressState!.stationId,
-            claimedByPlayerId: playerId,
-          },
-        };
-      }
-    }
-
-    const refreshedScanTargets = scanTargets.map(
-      (target) => updatedObjects.find((obj) => obj.id === target.id) ?? target,
-    );
-
-    const discoveries = { ...(workingPlayer.scanDiscoveriesByObjectId ?? {}) };
-
-    for (const scanTarget of refreshedScanTargets) {
-      const lootResourceTypeRaw = (scanTarget as any).lootResourceType;
-      const lootUpgradeRaw = (scanTarget as any).lootUpgrade;
-      const lootRollValueRaw = (scanTarget as any).lootRollValue;
-
-      const rollValue = typeof lootRollValueRaw === 'number' && Number.isFinite(lootRollValueRaw)
-        ? lootRollValueRaw
-        : 0;
-
-      const totalRoll = rollValue;
-
-      const hasLootUpgrade = !!lootUpgradeRaw;
-      const reservedUpgrade: UpgradeCard | null = hasLootUpgrade ? (lootUpgradeRaw as UpgradeCard) : null;
-      const resourceType = (() => {
-        const hasLootResource = typeof lootResourceTypeRaw === 'string' && lootResourceTypeRaw.length > 0;
-        if (!hasLootResource) {
-          return null;
-        }
-        if (!BASIC_RESOURCE_TYPES.includes(lootResourceTypeRaw as BasicResourceType)) {
-          return null;
-        }
-        return lootResourceTypeRaw as BasicResourceType;
-      })();
-
-      const foundResource = resourceType !== null;
-
-      discoveries[scanTarget.id] = {
-        objectId: scanTarget.id,
-        objectType: scanTarget.type,
-        source: 'scan',
-        rollValue,
-        totalRoll,
-        foundResource,
-        resourceType,
-        foundUpgrade: hasLootUpgrade,
-        reservedUpgrade,
-        revealedAtTurn: game.currentTurn,
-        crewId: action.crewId,
-      } satisfies ScanDiscoveryRecord;
-    }
+    const scanResolution = applyScanResultsForTargets({
+      player: workingPlayer,
+      scanTargets,
+      updatedObjects,
+      eventState,
+      currentTurn: game.currentTurn,
+      crewId: action.crewId,
+      playerId,
+    });
+    workingPlayer = scanResolution.player;
+    updatedObjects = scanResolution.updatedObjects;
+    eventState = scanResolution.eventState;
 
     const shipAfterCost = spendPowerInSection(workingPlayer.ship, actingSection, 1);
     workingPlayer = {
       ...workingPlayer,
       ship: shipAfterCost,
-      scanDiscoveriesByObjectId: discoveries,
     };
 
     players.set(playerId, workingPlayer);
@@ -5984,6 +6074,7 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
   const updatedPlayers = new Map<string, PlayerState>();
   const removedObjectIds = new Set<string>();
   let updatedObjects = [...game.board.objects];
+  let eventState = game.eventState;
 
   // Copy all players first
   for (const player of game.players.values()) {
@@ -6040,56 +6131,17 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
       }
     }
 
-    const sciLabFullyPoweredAtStart = ShipUtils.isFullyPowered(workingPlayer.ship, SHIP_SECTIONS.SCI_LAB);
-
     const stimResult = consumeStimPackIfRequested(workingPlayer, action, crew, actingSection);
     workingPlayer = stimResult.player;
-
-    // Get target object
-    const targetObjectId = action.target?.objectId;
-    const targetObject = updatedObjects.find(obj => obj.id === targetObjectId);
-
-    if (!targetObject) {
-      throw new Error(
-        'Cannot resolve acquire action because target object was not found on board. ' +
-          `Root cause: action.target.objectId is "${String(targetObjectId)}" but no matching object exists in game.board.objects. ` +
-          'Fix: Select a valid object on the board before acquiring.'
-      );
-    }
-
-    // Check range (same as scan)
-    const distance = BoardUtils.calculateDistance(workingPlayer.ship.position, targetObject.position, game.board);
-    let maxRange = 1;
-    const sciLabRangeBonus = sciLabFullyPoweredAtStart
-      ? (workingPlayer.captain.captainType === 'technologist' ? 3 : 2)
-      : 0;
-    maxRange += sciLabRangeBonus;
-    const scanRangeBonus = getScanRangeBonus(crew);
-    maxRange += scanRangeBonus;
-    if (workingPlayer.captain.captainType === 'technologist' && crew.type === 'basic' && scanRangeBonus > 0) {
-      maxRange += 1;
-    }
-    if (actingSection === SHIP_SECTIONS.BRIDGE && playerHasPoweredUpgrade(workingPlayer, workingPlayer.ship, 'neutron_calibrator')) {
-      maxRange += 1;
-    }
-    if (distance > maxRange) {
-      throw new Error(
-        'Cannot resolve acquire action because target object is out of range. ' +
-          `Root cause: distance to object is ${distance}, but max range is ${maxRange}. ` +
-          'Fix: Move closer to the object or improve Sci-Lab power/crew bonuses.'
-      );
-    }
-
-    const shipAfterCost = hasTeleporterUpgrade
-      ? workingPlayer.ship
-      : spendPowerInSection(workingPlayer.ship, actingSection, 1);
-    workingPlayer = {
-      ...workingPlayer,
-      ship: shipAfterCost,
-    };
-
     const discoveries = workingPlayer.scanDiscoveriesByObjectId ?? {};
-    const acquireTargets = [targetObject];
+    const maxRange = getBoardActionMaxRange(workingPlayer, crew, actingSection);
+    const requestedTargetIds: string[] = [];
+
+    const primaryTargetObjectId = action.target?.objectId;
+    if (typeof primaryTargetObjectId === 'string' && primaryTargetObjectId.length > 0) {
+      requestedTargetIds.push(primaryTargetObjectId);
+    }
+
     const rawSecondaryAcquireTargetObjectId = (action.parameters as Record<string, unknown> | undefined)
       ?.secondaryTargetObjectId;
 
@@ -6098,41 +6150,63 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
       typeof rawSecondaryAcquireTargetObjectId === 'string' &&
       rawSecondaryAcquireTargetObjectId.length > 0
     ) {
-      const secondaryObject = updatedObjects.find(obj => obj.id === rawSecondaryAcquireTargetObjectId);
-      if (!secondaryObject) {
-        throw new Error(
-          'Cannot resolve acquire action because secondary target object was not found on board. ' +
-            `Root cause: action.parameters.secondaryTargetObjectId is "${String(rawSecondaryAcquireTargetObjectId)}" but no matching object exists in game.board.objects. ` +
-            'Fix: Set secondaryTargetObjectId to a valid object id in game.board.objects, or omit it.'
-        );
-      }
-
-      const secondaryDistance = BoardUtils.calculateDistance(
-        workingPlayer.ship.position,
-        secondaryObject.position,
-        game.board,
-      );
-      if (secondaryDistance > maxRange) {
-        throw new Error(
-          'Cannot resolve acquire action because secondary target object is out of range. ' +
-            `Root cause: distance to object is ${secondaryDistance}, but max range is ${maxRange}. ` +
-            'Fix: Move closer to the object or improve Sci-Lab power/crew bonuses.'
-        );
-      }
-
-      acquireTargets.push(secondaryObject);
+      requestedTargetIds.push(rawSecondaryAcquireTargetObjectId);
     }
 
-    const updatedScanDiscoveries = { ...discoveries };
+    const scanFallbackTargets: AnySpaceObject[] = [];
+    const acquireTargetIds: string[] = [];
 
-    for (const acquireTarget of acquireTargets) {
-      const stored = discoveries[acquireTarget.id];
+    for (const requestedTargetId of requestedTargetIds) {
+      const targetObject = updatedObjects.find((obj) => obj.id === requestedTargetId);
+      if (!targetObject) {
+        continue;
+      }
+
+      const distance = BoardUtils.calculateDistance(workingPlayer.ship.position, targetObject.position, game.board);
+      if (distance > maxRange) {
+        continue;
+      }
+
+      const stored = discoveries[targetObject.id];
+      if (stored) {
+        acquireTargetIds.push(targetObject.id);
+        continue;
+      }
+
+      scanFallbackTargets.push(targetObject);
+    }
+
+    const requiresScanCost = scanFallbackTargets.length > 0;
+    const hasResolvableTarget = acquireTargetIds.length > 0 || scanFallbackTargets.length > 0;
+    const actionCost = hasResolvableTarget && (requiresScanCost || !hasTeleporterUpgrade) ? 1 : 0;
+    if (actionCost > 0) {
+      workingPlayer = {
+        ...workingPlayer,
+        ship: spendPowerInSection(workingPlayer.ship, actingSection, actionCost),
+      };
+    }
+
+    if (scanFallbackTargets.length > 0) {
+      const scanFallbackResolution = applyScanResultsForTargets({
+        player: workingPlayer,
+        scanTargets: scanFallbackTargets,
+        updatedObjects,
+        eventState,
+        currentTurn: game.currentTurn,
+        crewId: action.crewId,
+        playerId,
+      });
+      workingPlayer = scanFallbackResolution.player;
+      updatedObjects = scanFallbackResolution.updatedObjects;
+      eventState = scanFallbackResolution.eventState;
+    }
+
+    const updatedScanDiscoveries = { ...(workingPlayer.scanDiscoveriesByObjectId ?? {}) };
+
+    for (const acquireTargetId of acquireTargetIds) {
+      const stored = updatedScanDiscoveries[acquireTargetId];
       if (!stored) {
-        throw new Error(
-          'Cannot resolve acquire action because target was never scanned. ' +
-            `Root cause: player "${playerId}" attempted to acquire object "${acquireTarget.id}" without a recorded scan. ` +
-            'Fix: Perform a scan action on the object before acquiring.',
-        );
+        continue;
       }
 
       const { foundResource, foundUpgrade, resourceType, reservedUpgrade } = resolveAcquireRewardFromStoredDiscovery(stored);
@@ -6148,7 +6222,7 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
         if (workingPlayer.captain.captainType === 'merchant') {
           const bonusType = pickDeterministicBasicResource(
             game,
-            `acquire_bonus:${playerId}:${action.crewId}:${acquireTarget.id}:${game.currentTurn}`,
+            `acquire_bonus:${playerId}:${action.crewId}:${acquireTargetId}:${game.currentTurn}`,
           );
           const currentBonus = updatedResources[bonusType] ?? 0;
           updatedResources[bonusType] = currentBonus + 1;
@@ -6169,10 +6243,10 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
         }
       }
 
-      updatedObjects = updatedObjects.filter((obj) => obj.id !== acquireTarget.id);
-      removedObjectIds.add(acquireTarget.id);
+      updatedObjects = updatedObjects.filter((obj) => obj.id !== acquireTargetId);
+      removedObjectIds.add(acquireTargetId);
 
-      delete updatedScanDiscoveries[acquireTarget.id];
+      delete updatedScanDiscoveries[acquireTargetId];
     }
 
     workingPlayer = {
@@ -6218,6 +6292,7 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
       objects: updatedObjects,
     },
     players: updatedPlayers,
+    eventState,
   };
 }
 
@@ -7617,7 +7692,11 @@ export function applyGameStateTransitions(game: GameState): GameState {
  * 3. Defense: Attack nearby hostiles
  * 4. Support: Revive unconscious crew
  */
-export function generateBotActions(game: GameState, playerId: string): PlayerAction[] {
+export function generateBotActions(
+  game: GameState,
+  playerId: string,
+  options?: EngineInstrumentationOptionsInternal,
+): PlayerAction[] {
   const player = game.players.get(playerId);
 
   if (!player) {
@@ -7640,137 +7719,8 @@ export function generateBotActions(game: GameState, playerId: string): PlayerAct
     return []; // No actions for wrecked/escaped players
   }
 
-  const actions: PlayerAction[] = [];
-
-  // Get active crew members
-  const activeCrew = [
-    ...(player.captain.status === 'active' ? [player.captain] : []),
-    ...player.crew.filter(c => c.status === 'active'),
-  ];
-
-  if (activeCrew.length === 0) {
-    return []; // No crew to perform actions
-  }
-
-  // Assign actions based on priority
-  for (const crew of activeCrew) {
-    const action = selectBotActionForCrew(game, player, crew);
-    if (action) {
-      actions.push(action);
-    }
-  }
-
-  return actions;
-}
-
-/**
- * Select the best action for a specific crew member
- * Purpose: Determine what action a bot crew should take
- * Parameters:
- *   - game: Current game state
- *   - player: Bot player state
- *   - crew: Crew member to select action for
- * Returns: PlayerAction or null if no action needed
- * Side effects: None (pure function)
- */
-function selectBotActionForCrew(
-  game: GameState,
-  player: PlayerState,
-  crew: AnyCrew | Captain,
-): PlayerAction | null {
-  const canTargetRepairSectionFrom = (from: ShipSection, target: ShipSection): boolean => {
-    if (from === target) {
-      return true;
-    }
-
-    const layoutA = (SHIP_CONNECTION_LAYOUT as unknown as Record<string, any>)[from];
-    const layoutB = (SHIP_CONNECTION_LAYOUT as unknown as Record<string, any>)[target];
-
-    const hasConduitEdge =
-      (layoutA?.conduitConnections?.[target] ?? 0) > 0 ||
-      (layoutB?.conduitConnections?.[from] ?? 0) > 0;
-
-    const hasCorridorEdge =
-      layoutA?.corridors?.[target] === 1 ||
-      layoutB?.corridors?.[from] === 1;
-
-    return hasConduitEdge || hasCorridorEdge;
-  };
-
-  // Priority 1: Restore power if Engineering is low
-  const engineeringPower = player.ship.sections[SHIP_SECTIONS.ENGINEERING]?.powerDice.length ?? 0;
-  if (engineeringPower < 2 && crew.location === SHIP_SECTIONS.ENGINEERING) {
-    return {
-      playerId: player.id,
-      crewId: crew.id,
-      type: 'restore',
-    };
-  }
-
-  // Priority 2: Repair if any section has low hull
-  const crewLocation = crew.location as ShipSection | null;
-  if (crewLocation) {
-    for (const sectionKey of Object.values(SHIP_SECTIONS)) {
-      const section = player.ship.sections[sectionKey];
-      if (!section || section.hull >= 4) {
-        continue;
-      }
-
-      if (!canTargetRepairSectionFrom(crewLocation, sectionKey)) {
-        continue;
-      }
-
-      return {
-        playerId: player.id,
-        crewId: crew.id,
-        type: 'repair',
-        target: { section: sectionKey },
-        parameters: { repairType: 'hull' },
-      };
-    }
-  }
-
-  // Priority 3: Maneuver outward if in danger zone (inner rings)
-  if (player.ship.position.ring <= 3 && crew.location === SHIP_SECTIONS.BRIDGE) {
-    return {
-      playerId: player.id,
-      crewId: crew.id,
-      type: 'maneuver',
-      parameters: { direction: 'outward', powerSpent: 2 },
-    };
-  }
-
-  // Priority 4: Attack nearby hostiles
-  const nearbyHostiles = game.board.objects.filter(
-    obj => obj.type === 'hostile_ship' &&
-    BoardUtils.calculateDistance(player.ship.position, obj.position, game.board) <= 1
-  );
-  if (nearbyHostiles.length > 0 && crew.location === SHIP_SECTIONS.DEFENSE) {
-    return {
-      playerId: player.id,
-      crewId: crew.id,
-      type: 'attack',
-      target: { objectId: nearbyHostiles[0].id },
-    };
-  }
-
-  // Priority 5: Revive unconscious crew
-  const unconsciousCrew = player.crew.find(c => c.status === 'unconscious');
-  if (unconsciousCrew && crew.location === SHIP_SECTIONS.MED_LAB) {
-    return {
-      playerId: player.id,
-      crewId: crew.id,
-      type: 'revive',
-      parameters: { targetCrewId: unconsciousCrew.id },
-    };
-  }
-
-  // Default: Restore power
-  return {
-    playerId: player.id,
-    crewId: crew.id,
-    type: 'restore',
-  };
+  const { strategy } = getBotStrategyForPlayer(player);
+  return strategy(game, player, options);
 }
 
 /**
@@ -7781,12 +7731,15 @@ function selectBotActionForCrew(
  * Returns: TurnActions record with bot player actions
  * Side effects: None (pure function)
  */
-export function generateAllBotActions(game: GameState): TurnActions {
+export function generateAllBotActions(
+  game: GameState,
+  options?: EngineInstrumentationOptionsInternal,
+): TurnActions {
   const botActions: TurnActions = {};
 
   for (const player of game.players.values()) {
     if (player.isBot && player.status === 'active') {
-      const actions = generateBotActions(game, player.id);
+      const actions = generateBotActions(game, player.id, options);
       botActions[player.id] = actions;
     }
   }
@@ -8135,6 +8088,7 @@ function applyGravityFluxPlayersEvent(game: GameState, direction: 1 | -1): GameS
 export function processTurn(
   game: GameState,
   actionsByPlayer: TurnActions,
+  options?: EngineInstrumentationOptionsInternal,
 ): GameState {
   if (game.status !== 'in_progress') {
     throw new Error(
@@ -8156,7 +8110,7 @@ export function processTurn(
   if (gameWithLoot.turnPhase === 'action_execution') {
     // Action execution phase sequence:
     // 1. Apply player actions in rulebook order
-    const afterActions = applyPlayerActions(gameWithLoot, actionsByPlayer);
+    const afterActions = applyPlayerActions(gameWithLoot, actionsByPlayer, options);
     // 2. Auto-generate shields from Defense, check life support
     const afterAutoGenerate = applyAutoGenerate(afterActions);
     // 3. Check for game state transitions (wrecked, escaped, game end)
@@ -8177,9 +8131,15 @@ export function processTurn(
     const afterTransitions = applyGameStateTransitions(afterEnvironment);
     // 5. If game ended, return without advancing turn
     if (afterTransitions.status !== 'in_progress') {
+      logTurnSummaryIfEnabled(afterTransitions, afterTransitions.currentTurn, options);
       return afterTransitions;
     }
     return advanceTurn(afterTransitions);
+  }
+
+  if (gameWithLoot.turnPhase === 'resolution') {
+    logTurnSummaryIfEnabled(gameWithLoot, gameWithLoot.currentTurn, options);
+    return advanceTurn(gameWithLoot);
   }
 
   return advanceTurn(gameWithLoot);
