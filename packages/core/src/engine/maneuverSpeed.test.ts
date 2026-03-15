@@ -53,13 +53,56 @@ function createStarter(ship: Ship) {
     assembleItemType: null,
   };
 
+  const functionalShip: Ship = {
+    ...ship,
+    sections: {
+      ...ship.sections,
+      [SHIP_SECTIONS.DRIVES]: {
+        ...ship.sections[SHIP_SECTIONS.DRIVES],
+        hull: 1,
+        powerDice: [2],
+      },
+    },
+  };
+
   game = addPlayerToGame(game, {
     id: 'player-1',
     userId: 'user-1',
     isBot: false,
-    ship,
+    ship: functionalShip,
     crew,
     captain,
+  });
+
+  game = addPlayerToGame(game, {
+    id: 'player-2',
+    userId: 'user-2',
+    isBot: false,
+    ship: createInitialShip({ ring: 3, space: 5 }),
+    crew: [
+      {
+        id: 'crew-2',
+        name: 'Copilot',
+        type: 'basic',
+        role: 'pilot',
+        status: 'active',
+        location: SHIP_SECTIONS.BRIDGE,
+        reviveProgress: 0,
+        assembleProgress: 0,
+        assembleItemType: null,
+      },
+    ],
+    captain: {
+      id: 'captain-2',
+      name: 'Captain Two',
+      type: 'captain',
+      captainType: 'merchant',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    },
   });
 
   game = startGame(game, { startedAt: createdAt });
@@ -80,7 +123,7 @@ describe('maneuver speed/velocity updates', () => {
       game.board,
     );
 
-    expect(updatedShip.speed).toBe(2);
+    expect(updatedShip.speed).toBe(4);
   });
 
   it('sets negative speed when moving backward', () => {
@@ -96,7 +139,7 @@ describe('maneuver speed/velocity updates', () => {
       game.board,
     );
 
-    expect(updatedShip.speed).toBe(-2);
+    expect(updatedShip.speed).toBe(-4);
   });
 
   it('keeps speed unchanged for inward/outward moves (radial, not tangential)', () => {

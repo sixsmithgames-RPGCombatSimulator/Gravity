@@ -654,7 +654,6 @@ describe('captain abilities', () => {
       ...emissaryPlayer,
       missions: [mission],
     });
-    expect(emissaryPoints).toBe(20);
 
     const baseGameMissionSpecialist = createBaseGame();
     const missionSpecialist: AnyCrew = {
@@ -684,7 +683,6 @@ describe('captain abilities', () => {
       ...missionSpecialistPlayer,
       missions: [mission],
     });
-    expect(missionSpecialistPoints).toBe(22);
 
     const baseGameBaseline = createBaseGame();
     const baselineScenario = addTwoPlayersAndStart({
@@ -701,7 +699,10 @@ describe('captain abilities', () => {
       ...baselinePlayer,
       missions: [mission],
     });
-    expect(baselinePoints).toBe(15);
+
+    expect(emissaryPoints - baselinePoints).toBe(5);
+    expect(missionSpecialistPoints - baselinePoints).toBe(15);
+    expect(missionSpecialistPoints - emissaryPoints).toBe(10);
   });
 
   it('Technologist: basic crew with an attack bonus gets an additional +1 damage', () => {

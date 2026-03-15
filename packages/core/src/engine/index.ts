@@ -2055,16 +2055,38 @@ export function applyPlayerActions(
       continue;
     }
 
+    const sortedActionsOfType = [...actionsOfType].sort((left, right) => {
+      const leftPlayer = currentGame.players.get(left.playerId);
+      if (!leftPlayer) {
+        throw new Error(
+          'Cannot sort action resolution order because the left player was not found. ' +
+            `Root cause: player id "${left.playerId}" is missing from currentGame.players during ${actionType} resolution. ` +
+            'Fix: Ensure all action batches reference active players that still exist in the game state.'
+        );
+      }
+
+      const rightPlayer = currentGame.players.get(right.playerId);
+      if (!rightPlayer) {
+        throw new Error(
+          'Cannot sort action resolution order because the right player was not found. ' +
+            `Root cause: player id "${right.playerId}" is missing from currentGame.players during ${actionType} resolution. ` +
+            'Fix: Ensure all action batches reference active players that still exist in the game state.'
+        );
+      }
+
+      return leftPlayer.playerOrder - rightPlayer.playerOrder;
+    });
+
     validateAndTrackCyberneticsActionLimits(
       currentGame,
       actionType,
-      actionsOfType,
+      sortedActionsOfType,
       resolvedActionCountsByPlayerId,
       cyberneticsBonusCrewIdByPlayerId,
     );
 
     // Resolve all actions of this type simultaneously
-    currentGame = resolveActionsOfType(currentGame, actionType, actionsOfType);
+    currentGame = resolveActionsOfType(currentGame, actionType, sortedActionsOfType);
   }
 
   return currentGame;
@@ -6128,7 +6150,7 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
         );
       }
 
-      const { foundResource, foundUpgrade, resourceType } = stored;
+      const { foundResource, foundUpgrade, resourceType, reservedUpgrade } = resolveAcquireRewardFromStoredDiscovery(stored);
 
       if (foundResource && resourceType) {
         const updatedResources: PlayerState['resources'] = {
@@ -6154,10 +6176,10 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
       }
 
       if (foundUpgrade) {
-        if (stored.reservedUpgrade) {
+        if (reservedUpgrade) {
           workingPlayer = {
             ...workingPlayer,
-            pendingUpgrades: [...workingPlayer.pendingUpgrades, stored.reservedUpgrade],
+            pendingUpgrades: [...workingPlayer.pendingUpgrades, reservedUpgrade],
           };
         }
       }
@@ -6223,6 +6245,64 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
  * Returns: Discovery result with optional resource type and upgrade flag
  * Side effects: None (pure function)
  */
+
+function resolveAcquireRewardFromStoredDiscovery(discovery: ScanDiscoveryRecord): {
+  foundResource: boolean;
+  resourceType: BasicResourceType | null;
+  foundUpgrade: boolean;
+  reservedUpgrade: UpgradeCard | null;
+} {
+  const resourceTypeRaw = discovery.resourceType;
+  const resourceType =
+    typeof resourceTypeRaw === 'string' && BASIC_RESOURCE_TYPES.includes(resourceTypeRaw as BasicResourceType)
+      ? (resourceTypeRaw as BasicResourceType)
+      : null;
+
+  const rollValue = discovery.rollValue;
+  const reservedUpgrade = discovery.reservedUpgrade ?? null;
+
+  switch (discovery.objectType) {
+    case 'asteroid_cluster':
+      return {
+        foundResource: resourceType !== null && rollValue >= 6,
+        resourceType,
+        foundUpgrade: false,
+        reservedUpgrade: null,
+      };
+    case 'debris':
+      return {
+        foundResource: resourceType !== null && rollValue >= 4,
+        resourceType,
+        foundUpgrade: false,
+        reservedUpgrade: null,
+      };
+    case 'wrecked_ship': {
+      const foundUpgrade = reservedUpgrade !== null && rollValue >= 5;
+      return {
+        foundResource: resourceType !== null && rollValue >= 2,
+        resourceType,
+        foundUpgrade,
+        reservedUpgrade: foundUpgrade ? reservedUpgrade : null,
+      };
+    }
+    case 'functional_station': {
+      const foundUpgrade = reservedUpgrade !== null && rollValue >= 4;
+      return {
+        foundResource: resourceType !== null,
+        resourceType,
+        foundUpgrade,
+        reservedUpgrade: foundUpgrade ? reservedUpgrade : null,
+      };
+    }
+    default:
+      return {
+        foundResource: false,
+        resourceType: null,
+        foundUpgrade: false,
+        reservedUpgrade: null,
+      };
+  }
+}
 
 
 /**
@@ -7336,6 +7416,7 @@ export function checkAndUpdateEscapedStatus(game: GameState): GameState {
       const updatedPlayer: PlayerState = {
         ...player,
         status: 'escaped',
+        escapedAtTurn: game.currentTurn,
       };
       updatedPlayers.set(player.id, updatedPlayer);
     } else {
@@ -7367,49 +7448,110 @@ export function checkAndUpdateEscapedStatus(game: GameState): GameState {
  * - Resources collected
  * - Escape bonus
  */
-export function calculateVictoryPoints(player: PlayerState): number {
+export function calculateVictoryPoints(player: PlayerState, allPlayers?: readonly PlayerState[]): number {
   let points = 0;
 
-  // Escape bonus (major points for escaping)
   if (player.status === 'escaped') {
-    points += 10;
+    if (typeof player.escapedAtTurn !== 'number' || !Number.isFinite(player.escapedAtTurn)) {
+      throw new Error(
+        'Cannot calculate victory points for an escaped player without a valid escapedAtTurn. ' +
+          `Root cause: player "${player.id}" has status "escaped" but escapedAtTurn is "${String(player.escapedAtTurn)}". ` +
+          'Fix: Record escapedAtTurn when a player transitions to escaped status and pass the final player list into calculateVictoryPoints.'
+      );
+    }
+
+    let earliestEscapeTurn = player.escapedAtTurn;
+    if (allPlayers) {
+      for (const candidate of allPlayers) {
+        if (candidate.status !== 'escaped') {
+          continue;
+        }
+        if (typeof candidate.escapedAtTurn !== 'number' || !Number.isFinite(candidate.escapedAtTurn)) {
+          throw new Error(
+            'Cannot calculate victory points because an escaped player is missing escapedAtTurn. ' +
+              `Root cause: player "${candidate.id}" has status "escaped" but escapedAtTurn is "${String(candidate.escapedAtTurn)}". ` +
+              'Fix: Ensure every escaped player records escapedAtTurn before end-game scoring runs.'
+          );
+        }
+        if (candidate.escapedAtTurn < earliestEscapeTurn) {
+          earliestEscapeTurn = candidate.escapedAtTurn;
+        }
+      }
+    }
+
+    points += player.escapedAtTurn === earliestEscapeTurn ? 50 : 25;
   }
 
-  // Surviving crew points
-  const activeCrew = player.crew.filter(c => c.status === 'active').length;
-  points += activeCrew * 2;
-
-  // Captain survival bonus
-  if (player.captain.status === 'active') {
-    points += 3;
-  }
-
-  const missionMultiplier =
-    player.captain.captainType === 'emissary' ||
-    player.crew.some((crew) => crew.type === 'officer' && crew.role === 'mission_specialist')
-      ? 1.5
-      : 1;
-
+  let missionPoints = 0;
   for (const mission of player.missions) {
-    let missionPoints = 0;
     if (mission.objectives.primary.completed) {
       missionPoints += mission.objectives.primary.points;
     }
     if (mission.objectives.secondary?.completed) {
       missionPoints += mission.objectives.secondary.points;
     }
-    points += missionPoints * missionMultiplier;
   }
 
-  // Resources collected (minor points)
-  const totalResources = Object.values(player.resources).reduce(
-    (sum, count) => sum + (count ?? 0),
-    0
-  );
-  points += Math.floor(totalResources / 2);
+  const hasMissionMultiplier =
+    player.captain.captainType === 'emissary' ||
+    player.crew.some((crew) => crew.type === 'officer' && crew.role === 'mission_specialist');
+  points += hasMissionMultiplier ? Math.floor(missionPoints * 1.5) : missionPoints;
 
-  // Installed upgrades
-  points += player.installedUpgrades.length;
+  for (const section of Object.values(SHIP_SECTIONS) as ShipSection[]) {
+    if (ShipUtils.isFunctional(player.ship, section)) {
+      points += 5;
+    }
+    if (ShipUtils.isFullyPowered(player.ship, section)) {
+      points += 5;
+    }
+
+    const sectionState = player.ship.sections[section];
+    if (!sectionState) {
+      throw new Error(
+        'Cannot calculate victory points because a ship section is missing from player.ship.sections. ' +
+          `Root cause: player "${player.id}" has no state for section "${section}". ` +
+          'Fix: Ensure every ship initializes all sections before end-game scoring.'
+      );
+    }
+
+    points += sectionState.hull;
+    points += sectionState.powerDice.reduce((sum, die) => sum + die, 0);
+  }
+
+  points += player.ship.shields;
+
+  for (const crew of player.crew) {
+    if (crew.status !== 'active') {
+      continue;
+    }
+    points += crew.type === 'basic' ? 5 : 10;
+  }
+
+  if (player.captain.status === 'active') {
+    points += 10;
+  }
+
+  for (const upgrade of player.installedUpgrades) {
+    points += 5;
+
+    const powerRequiredRaw = (upgrade as { powerRequired?: unknown }).powerRequired;
+    const requiresPower =
+      typeof powerRequiredRaw === 'number' && Number.isFinite(powerRequiredRaw) && powerRequiredRaw > 0;
+    if (!requiresPower) {
+      continue;
+    }
+
+    if (!playerHasPoweredUpgrade(player, player.ship, upgrade.id)) {
+      continue;
+    }
+
+    points += 5;
+
+    const storedPowerRaw = (upgrade as { storedPower?: unknown }).storedPower;
+    if (typeof storedPowerRaw === 'number' && Number.isFinite(storedPowerRaw) && storedPowerRaw > 0) {
+      points += storedPowerRaw;
+    }
+  }
 
   return points;
 }
@@ -7435,12 +7577,11 @@ export function checkGameEndConditions(game: GameState): GameState {
   const escapedPlayers = players.filter(p => p.status === 'escaped');
   const wreckedPlayers = players.filter(p => p.status === 'wrecked');
 
-  // If any players still active, game continues
-  if (activePlayers.length > 0) {
+  const shouldEnd = escapedPlayers.length >= players.length / 2 || activePlayers.length === 0;
+  if (!shouldEnd) {
     return game;
   }
 
-  // All players have either escaped or are wrecked
   let newStatus: 'completed' | 'abandoned';
 
   if (wreckedPlayers.length === players.length) {
@@ -7449,12 +7590,6 @@ export function checkGameEndConditions(game: GameState): GameState {
   } else {
     // At least someone escaped
     newStatus = 'completed';
-  }
-
-  // Calculate final scores for escaped players
-  const playerScores: Record<string, number> = {};
-  for (const player of escapedPlayers) {
-    playerScores[player.id] = calculateVictoryPoints(player);
   }
 
   return {
@@ -8033,12 +8168,9 @@ export function processTurn(
     // 2. Auto-generate shields from Defense, check life support
     const afterAutoGenerate = applyAutoGenerate(afterActions);
     // 3. Check for game state transitions (wrecked, escaped, game end)
-    const afterTransitions = applyGameStateTransitions(afterAutoGenerate);
-    // 4. If game ended, return without advancing turn
-    if (afterTransitions.status !== 'in_progress') {
-      return afterTransitions;
-    }
-    return advanceTurn(afterTransitions);
+    const afterWrecked = checkAndUpdateWreckedStatus(afterAutoGenerate);
+    const afterEscaped = checkAndUpdateEscapedStatus(afterWrecked);
+    return advanceTurn(afterEscaped);
   }
 
   if (gameWithLoot.turnPhase === 'environment') {
@@ -8308,8 +8440,9 @@ export function updateOrbitsAndObjects(game: GameState): GameState {
     // Root cause: Ships with insufficient speed were not falling inward with other objects,
     // and negative-speed geo-sync ships should stay fixed relative to the planet.
     const speedRequirement = ringForShip.speedRequirement;
-    const isGeoSyncOrbit = player.ship.speed < 0 && Math.abs(player.ship.speed) === speedRequirement;
-    const isSpeedInsufficient = player.ship.speed < speedRequirement;
+    const absoluteSpeed = Math.abs(player.ship.speed);
+    const isGeoSyncOrbit = player.ship.speed < 0 && absoluteSpeed === speedRequirement;
+    const isSpeedInsufficient = absoluteSpeed < speedRequirement;
 
     let newRing = position.ring;
 
@@ -8430,15 +8563,16 @@ export function updateOrbitsAndObjects(game: GameState): GameState {
 
   const updatedObjectsAfterHostiles = [...board.objects];
   const updatedPlayersAfterHostiles = new Map<string, PlayerState>(updatedPlayers);
-  const activePlayersAfterCollisions = Array.from(updatedPlayersAfterHostiles.values()).filter(
-    (player) => player.status === 'active',
-  );
 
   for (let objectIndex = 0; objectIndex < updatedObjectsAfterHostiles.length; objectIndex += 1) {
     const object = updatedObjectsAfterHostiles[objectIndex];
     if (object.type !== 'hostile_ship') {
       continue;
     }
+
+    const activePlayersAfterCollisions = Array.from(updatedPlayersAfterHostiles.values()).filter(
+      (player) => player.status === 'active',
+    );
 
     if (activePlayersAfterCollisions.length === 0) {
       continue;

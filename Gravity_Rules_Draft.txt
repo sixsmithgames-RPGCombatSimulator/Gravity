@@ -1,3 +1,7 @@
+INITIAL RULES DRAFT - HISTORICAL SOURCE ONLY
+This file is the original Gravity rules draft retained for historical reference.
+The current authoritative rules source is `docs/Gravity_Rules_Current.md`.
+
 Notes
 20240625
 Make falling objects move inward and forward every turn and new objects arrive every other turn. Making movement forward cost the same energy as moving backward. Moving backward makes the ship go inward as well. And moving forward makes the ship go outward as well.

@@ -227,6 +227,7 @@ export interface PlayerState {
   botStrategy?: string;
   playerOrder: number;
   status: PlayerStatus;
+  escapedAtTurn?: number | null;
 
   // Ship state (single source of truth)
   ship: Ship;

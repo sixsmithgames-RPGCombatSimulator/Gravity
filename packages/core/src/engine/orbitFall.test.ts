@@ -28,6 +28,8 @@ function createStartedGame(ship: Ship, boardSpeedByRing: number[]) {
     expansions: ['core'],
   };
 
+  const intendedPosition = ship.position;
+
   const createdAt = new Date('2026-01-01T00:00:00.000Z');
 
   let game = createNewGame({
@@ -72,9 +74,55 @@ function createStartedGame(ship: Ship, boardSpeedByRing: number[]) {
     captain,
   });
 
+  game = addPlayerToGame(game, {
+    id: 'player-2',
+    userId: 'user-2',
+    isBot: false,
+    ship: createInitialShip({ ring: 8, space: 5 }),
+    crew: [
+      {
+        id: 'crew-2',
+        name: 'Copilot',
+        type: 'basic',
+        role: 'pilot',
+        status: 'active',
+        location: SHIP_SECTIONS.BRIDGE,
+        reviveProgress: 0,
+        assembleProgress: 0,
+        assembleItemType: null,
+      },
+    ],
+    captain: {
+      id: 'captain-2',
+      name: 'Captain Two',
+      type: 'captain',
+      captainType: 'merchant',
+      status: 'active',
+      location: SHIP_SECTIONS.BRIDGE,
+      reviveProgress: 0,
+      assembleProgress: 0,
+      assembleItemType: null,
+    },
+  });
+
   game = startGame(game, { startedAt: createdAt });
+  const startedPlayer = game.players.get('player-1');
+  if (!startedPlayer) {
+    throw new Error('Expected player-1 to exist after startGame in orbitFall test setup.');
+  }
+
+  const players = new Map(game.players);
+  players.set('player-1', {
+    ...startedPlayer,
+    ship: {
+      ...startedPlayer.ship,
+      position: intendedPosition,
+    },
+  });
+
   game = {
     ...game,
+    players,
     currentTurn: TURN_CONFIG.CYCLE_LENGTH,
   };
 

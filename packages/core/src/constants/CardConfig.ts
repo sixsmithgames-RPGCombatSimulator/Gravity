@@ -56,90 +56,18 @@ export const CORE_EVENT_CARDS = [
 
 export const CORE_MISSION_CARDS = [
   {
-    id: 'distress_call',
-    name: 'Distress Call',
-    description:
-      "You are receiving a distress call. The signal is faint but still there, and now it is clear why. It's up to you to find and rescue anyone along with yourself.",
-    objectives: {
-      primary: {
-        description: 'Tractor 3 Debris fields',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'Find Life Pod',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
     id: 'the_reinhardt',
     name: 'The Reinhardt',
     description:
       "Crazy! That's what they called you. They simply cannot recognize genius. Your mission is to successfully navigate closer to the black hole than anyone else.. Ever.",
     objectives: {
       primary: {
-        description: 'Get to inner most ring',
+        description: 'Reach ring 1 at least once',
         points: 10,
         completed: false,
       },
       secondary: {
-        description: 'Be the only one',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
-    id: 'espionage',
-    name: 'Espionage',
-    description:
-      'You must gather information on the other ships capabilities. Since information is the way to gain real power. Gain as much as you can.',
-    objectives: {
-      primary: {
-        description: 'Scan 2 ships',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'Scan 4 ships',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
-    id: 'diplomatic',
-    name: 'Diplomatic',
-    description:
-      'Fighting is for fools. Your pacifism will be rewarded if you can talk everyone out of fighting – no matter the cost.',
-    objectives: {
-      primary: {
-        description: 'No ships wrecked from combat',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'No player to player combat',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
-    id: 'trader',
-    name: 'Trader',
-    description:
-      'Where there is a problem, there is a profit to be made. When people are desperate there is all to be gained.',
-    objectives: {
-      primary: {
-        description: 'Trade with 2 ships',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'Trade with 4 ships',
+        description: 'Be the only player who reached ring 1 during the game',
         points: 15,
         completed: false,
       },
@@ -152,7 +80,7 @@ export const CORE_MISSION_CARDS = [
       "Exploring for explorations sake. This isn't a catastrophe. It's a great opportunity! Navigate the circumference and gather as much data as you can.",
     objectives: {
       primary: {
-        description: 'Make 5 full orbits',
+        description: 'Complete 5 full orbits',
         points: 10,
         completed: false,
       },
@@ -170,12 +98,12 @@ export const CORE_MISSION_CARDS = [
       'Other ships? You mean targets. Teach these other captains exactly why they should fear and respect your might. Show them the power of the empire!',
     objectives: {
       primary: {
-        description: 'Attack 6 times',
+        description: 'Resolve 6 Attack actions against hostile ships',
         points: 10,
         completed: false,
       },
       secondary: {
-        description: 'Wreck 2 ships',
+        description: 'Destroy 2 hostile ships',
         points: 15,
         completed: false,
       },
@@ -194,42 +122,6 @@ export const CORE_MISSION_CARDS = [
       },
       secondary: {
         description: 'Install 3 upgrades',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
-    id: 'sling_shot',
-    name: 'Sling Shot',
-    description:
-      'Sometimes the only way out is thru. A sling shot is done by taking your ship from the outer most ring to the inner most and back again in 4 turns or less. Do it for the whales.',
-    objectives: {
-      primary: {
-        description: 'Use all your speed once',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'Perform escape without collision',
-        points: 15,
-        completed: false,
-      },
-    },
-  },
-  {
-    id: 'saboteur',
-    name: 'Saboteur',
-    description:
-      'There is at least one among your crew. They are the ones that got you into this mess. Find out who and blow them out the nearest airlock!',
-    objectives: {
-      primary: {
-        description: 'Eliminate 1 crew',
-        points: 10,
-        completed: false,
-      },
-      secondary: {
-        description: 'Eliminate 3 crew',
         points: 15,
         completed: false,
       },

@@ -29,7 +29,7 @@ export function GameEndOverlay() {
     userId: player.userId,
     isBot: player.isBot,
     status: player.status,
-    score: calculateVictoryPoints(player),
+    score: calculateVictoryPoints(player, players),
     crewSurvived: player.crew.filter((c) => c.status === 'active').length,
     captainSurvived: player.captain.status === 'active',
   }));
