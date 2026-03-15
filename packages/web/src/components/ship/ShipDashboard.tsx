@@ -2987,11 +2987,6 @@ function CrewToken({
           {crew.reviveProgress}/{CREW_CONFIG.REVIVE_THRESHOLD}
         </span>
       )}
-      {reviveBlockedReason && canSelectReviveTarget === false && (
-        <span className="absolute -top-1 -right-1 z-20 rounded border border-amber-400 bg-amber-950/90 px-0.5 text-[9px] font-bold text-amber-200">
-          {reviveBlockedReason}
-        </span>
-      )}
       {showAssembleProgress && (
         <span className="absolute -bottom-1 -left-1 z-20 rounded border border-amber-400 bg-amber-950/90 px-0.5 text-[9px] font-bold text-amber-200">
           {displayAssembleProgress}/{CREW_CONFIG.ASSEMBLE_THRESHOLD}
