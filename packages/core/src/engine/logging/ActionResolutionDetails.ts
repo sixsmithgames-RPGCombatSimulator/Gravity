@@ -26,7 +26,7 @@ export function buildBotActionResolutionLogEvent(
 
 type ResolutionSummary = {
   details: string;
-  result: 'success' | 'failed_validation' | 'no_effect';
+  result: 'success' | 'failed_validation' | 'no_effect' | 'lost';
 };
 
 function describeActionResolution(
@@ -49,7 +49,7 @@ function describeActionResolution(
   }
 
   if (action.type === 'maneuver') {
-    return describeManeuverResolution(previousPlayer, nextPlayer, action);
+    return describeManeuverResolution(nextGame, previousPlayer, nextPlayer, action);
   }
 
   if (action.type === 'attack') {
@@ -189,10 +189,24 @@ function describeReviveResolution(
 }
 
 function describeManeuverResolution(
+  nextGame: GameState,
   previousPlayer: PlayerState,
   nextPlayer: PlayerState,
   action: PlayerAction,
 ): ResolutionSummary {
+  const recordedOutcome = nextGame.lastActionResolutionRecordsByPlayerId?.[nextPlayer.id]?.find(
+    (record) =>
+      record.actionType === 'maneuver' &&
+      record.crewId === action.crewId &&
+      record.outcome === 'lost',
+  );
+  if (recordedOutcome) {
+    return {
+      result: 'lost',
+      details: recordedOutcome.message,
+    };
+  }
+
   const directionRaw = action.parameters?.direction;
   const direction = typeof directionRaw === 'string' ? directionRaw : 'unknown';
   const powerSpentRaw = action.parameters?.powerSpent;

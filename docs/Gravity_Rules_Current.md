@@ -638,10 +638,24 @@ If the threshold is not reached:
 ### Requirements
 - The acting crew must act from the Bridge.
 - The Bridge must be usable.
-- The Drives must have enough power to spend.
+- A player may resolve at most `1` Maneuver action per turn.
+- Restore and Route effects resolve before Maneuver, so any power they place into Drives is available when Maneuver resolves.
 
 ### Cost
 Spend the declared amount of power from Drives.
+
+If Drives are short by exactly `1` power when Maneuver resolves, a Pilot-family crew may reroute `1` power from another powered section into Drives for that Maneuver.
+
+Pilot-family crews are:
+
+- Pilot
+- Ace Pilot
+- First Officer
+- Captain
+
+The reroute source must be a different section than Drives, must contain at least `1` power, and must have an intact conduit path to Drives.
+
+If Drives still do not have enough power after all prior Restore/Route effects and any eligible Pilot-family reroute, the Maneuver action is lost. The action does not move the ship and does not spend the declared Drives cost.
 
 ### Acceleration
 Base acceleration equals power spent.

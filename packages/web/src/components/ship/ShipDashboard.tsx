@@ -7,6 +7,7 @@ import type { PlayerDiff, SectionDiff } from '../../store/gameStore';
 import {
   applyPlayerActions,
   BoardUtils,
+  canCrewRerouteOnePowerForManeuver,
   SHIP_SECTIONS,
   ShipUtils,
   POWER_CONFIG,
@@ -102,11 +103,127 @@ function getUpgradeMechanicsSummary(upgradeId: string): string | null {
 }
 
 const VALID_SECTIONS_SET = new Set(Object.values(SHIP_SECTIONS) as ShipSection[]);
+const PRE_MANEUVER_ACTION_TYPES = new Set<PlayerAction['type']>(['restore', 'route', 'revive', 'repair']);
 
 type HazardContributor = { id: string; ring: number; space: number; distance: number };
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function buildSafeExecutionPreviewActions(
+  currentPlayerId: string,
+  plannedActions: PlayerAction[],
+  allowedActionTypes?: ReadonlySet<PlayerAction['type']>,
+): PlayerAction[] {
+  const safeActions: PlayerAction[] = [];
+
+  for (const action of plannedActions) {
+    if (action.playerId !== currentPlayerId) {
+      continue;
+    }
+
+    if (allowedActionTypes && !allowedActionTypes.has(action.type)) {
+      continue;
+    }
+
+    if (!isNonEmptyString(action.crewId)) {
+      continue;
+    }
+    if (!isNonEmptyString(action.type)) {
+      continue;
+    }
+
+    const targetObjectId = (action.target as any)?.objectId as unknown;
+    const targetSection = (action.target as any)?.section as unknown;
+    const parameters = (action.parameters ?? {}) as Record<string, unknown>;
+
+    const stimmed = parameters.stimmed === true;
+    const stimDoctorId = (parameters as any).stimDoctorId as unknown;
+    if (stimmed && !isNonEmptyString(stimDoctorId)) {
+      continue;
+    }
+
+    if (action.type === 'revive') {
+      const targetCrewId = (parameters as any).targetCrewId as unknown;
+      if (!isNonEmptyString(targetCrewId)) {
+        continue;
+      }
+    }
+
+    if (action.type === 'repair') {
+      const repairType = (parameters as any).repairType as unknown;
+      if (!isNonEmptyString(targetSection)) {
+        continue;
+      }
+      if (repairType !== 'hull' && repairType !== 'conduit' && repairType !== 'corridor') {
+        continue;
+      }
+    }
+
+    if (action.type === 'scan' || action.type === 'acquire' || action.type === 'attack') {
+      if (!isNonEmptyString(targetObjectId)) {
+        continue;
+      }
+    }
+
+    if (action.type === 'launch') {
+      const launchType = (parameters as any).launchType as unknown;
+      if (!isNonEmptyString(targetObjectId)) {
+        continue;
+      }
+      if (launchType !== 'torpedo' && launchType !== 'probe') {
+        continue;
+      }
+    }
+
+    if (action.type === 'route') {
+      const sourceSection = (parameters as any).sourceSection as unknown;
+      const destinationSection = (parameters as any).targetSection as unknown;
+      const amount = (parameters as any).amount as unknown;
+      if (!isNonEmptyString(sourceSection) || !isNonEmptyString(destinationSection)) {
+        continue;
+      }
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+        continue;
+      }
+    }
+
+    if (action.type === 'maneuver') {
+      const direction = (parameters as any).direction as unknown;
+      const powerSpent = (parameters as any).powerSpent as unknown;
+      if (!isNonEmptyString(direction)) {
+        continue;
+      }
+      if (typeof powerSpent !== 'number' || !Number.isFinite(powerSpent) || powerSpent < 1) {
+        continue;
+      }
+    }
+
+    if (action.type === 'assemble') {
+      const itemType = (parameters as any).itemType as unknown;
+      if (!isNonEmptyString(itemType)) {
+        continue;
+      }
+    }
+
+    if (action.type === 'integrate') {
+      const upgradeId = (parameters as any).upgradeId as unknown;
+      if (!isNonEmptyString(upgradeId)) {
+        continue;
+      }
+    }
+
+    safeActions.push({
+      playerId: currentPlayerId,
+      crewId: action.crewId,
+      type: action.type,
+      target: action.target ?? null,
+      parameters: action.parameters,
+    });
+  }
+
+  return safeActions;
 }
 
 function getUpgradePowerStatus(upgrade: UpgradeCard, ship: Ship): {
@@ -3306,109 +3423,7 @@ export function ShipDashboard() {
       actionsByPlayer[playerId] = [];
     }
 
-    const safeActions: PlayerAction[] = [];
-    for (const action of ui.plannedActions) {
-      if (action.playerId !== currentPlayerId) {
-        continue;
-      }
-
-      if (!isNonEmptyString(action.crewId)) {
-        continue;
-      }
-      if (!isNonEmptyString(action.type)) {
-        continue;
-      }
-
-      const targetObjectId = (action.target as any)?.objectId as unknown;
-      const targetSection = (action.target as any)?.section as unknown;
-      const parameters = (action.parameters ?? {}) as Record<string, unknown>;
-
-      const stimmed = parameters.stimmed === true;
-      const stimDoctorId = (parameters as any).stimDoctorId as unknown;
-      if (stimmed && !isNonEmptyString(stimDoctorId)) {
-        continue;
-      }
-
-      if (action.type === 'revive') {
-        const targetCrewId = (parameters as any).targetCrewId as unknown;
-        if (!isNonEmptyString(targetCrewId)) {
-          continue;
-        }
-      }
-
-      if (action.type === 'repair') {
-        const repairType = (parameters as any).repairType as unknown;
-        if (!isNonEmptyString(targetSection)) {
-          continue;
-        }
-        if (repairType !== 'hull' && repairType !== 'conduit' && repairType !== 'corridor') {
-          continue;
-        }
-      }
-
-      if (action.type === 'scan' || action.type === 'acquire' || action.type === 'attack') {
-        if (!isNonEmptyString(targetObjectId)) {
-          continue;
-        }
-      }
-
-      if (action.type === 'launch') {
-        const launchType = (parameters as any).launchType as unknown;
-        if (!isNonEmptyString(targetObjectId)) {
-          continue;
-        }
-        if (launchType !== 'torpedo' && launchType !== 'probe') {
-          continue;
-        }
-      }
-
-      if (action.type === 'route') {
-        const sourceSection = (parameters as any).sourceSection as unknown;
-        const destinationSection = (parameters as any).targetSection as unknown;
-        const amount = (parameters as any).amount as unknown;
-        if (!isNonEmptyString(sourceSection) || !isNonEmptyString(destinationSection)) {
-          continue;
-        }
-        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
-          continue;
-        }
-      }
-
-      if (action.type === 'maneuver') {
-        const direction = (parameters as any).direction as unknown;
-        const powerSpent = (parameters as any).powerSpent as unknown;
-        if (!isNonEmptyString(direction)) {
-          continue;
-        }
-        if (typeof powerSpent !== 'number' || !Number.isFinite(powerSpent) || powerSpent < 1) {
-          continue;
-        }
-      }
-
-      if (action.type === 'assemble') {
-        const itemType = (parameters as any).itemType as unknown;
-        if (!isNonEmptyString(itemType)) {
-          continue;
-        }
-      }
-
-      if (action.type === 'integrate') {
-        const upgradeId = (parameters as any).upgradeId as unknown;
-        if (!isNonEmptyString(upgradeId)) {
-          continue;
-        }
-      }
-
-      safeActions.push({
-        playerId: currentPlayerId,
-        crewId: action.crewId,
-        type: action.type,
-        target: action.target ?? null,
-        parameters: action.parameters,
-      });
-    }
-
-    actionsByPlayer[currentPlayerId] = safeActions;
+    actionsByPlayer[currentPlayerId] = buildSafeExecutionPreviewActions(currentPlayerId, ui.plannedActions);
 
     try {
       const previewGame = applyPlayerActions(game, actionsByPlayer);
@@ -3445,6 +3460,42 @@ export function ShipDashboard() {
       }
 
       return sectionDiffs;
+    } catch {
+      return null;
+    }
+  }, [currentPlayerId, game, isExecutionPhase, ui.plannedActions]);
+
+  const executionPreviewPlayerBeforeManeuver = useMemo(() => {
+    if (!game || !currentPlayerId || !isExecutionPhase) {
+      return null;
+    }
+
+    const currentPlayer = game.players.get(currentPlayerId);
+    if (!currentPlayer || currentPlayer.status !== 'active') {
+      return null;
+    }
+
+    const actionsByPlayer: Record<string, PlayerAction[]> = {};
+    for (const [playerId, state] of game.players.entries()) {
+      if (state.status !== 'active') {
+        continue;
+      }
+      actionsByPlayer[playerId] = [];
+    }
+
+    actionsByPlayer[currentPlayerId] = buildSafeExecutionPreviewActions(
+      currentPlayerId,
+      ui.plannedActions,
+      PRE_MANEUVER_ACTION_TYPES,
+    );
+
+    try {
+      const previewGame = applyPlayerActions(game, actionsByPlayer);
+      const previewPlayer = previewGame.players.get(currentPlayerId);
+      if (!previewPlayer || previewPlayer.status !== 'active') {
+        return null;
+      }
+      return previewPlayer;
     } catch {
       return null;
     }
@@ -4791,6 +4842,7 @@ export function ShipDashboard() {
         const pendingUpgradesGained = diff.pendingUpgradesGained ?? [];
         const installedUpgradesGained = diff.installedUpgradesGained ?? [];
         const newScanDiscoveries = diff.newScanDiscoveries ?? [];
+        const actionResults = diff.actionResults ?? [];
 
         const hasAnyChanges =
           diff.shieldsDelta !== 0 ||
@@ -4799,7 +4851,8 @@ export function ShipDashboard() {
           resourceEntries.length > 0 ||
           pendingUpgradesGained.length > 0 ||
           installedUpgradesGained.length > 0 ||
-          newScanDiscoveries.length > 0;
+          newScanDiscoveries.length > 0 ||
+          actionResults.length > 0;
 
         if (!hasAnyChanges) {
           return null;
@@ -4907,6 +4960,19 @@ export function ShipDashboard() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {actionResults.length > 0 && (
+              <div className="mt-2">
+                <div className="text-[10px] text-gravity-muted text-center mb-1">Action results</div>
+                <div className="flex flex-col gap-1 text-[10px]">
+                  {actionResults.map((result) => (
+                    <div key={`${result.actionType}:${result.crewId}:${result.outcome}:${result.message}`} className="rounded border border-amber-400/30 bg-amber-950/20 px-2 py-1 text-amber-100">
+                      {result.message}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -6471,9 +6537,11 @@ export function ShipDashboard() {
                     direction?: unknown;
                     powerSpent?: unknown;
                     distance?: unknown;
+                    rerouteSourceSection?: unknown;
                     draftDirection?: unknown;
                     draftPowerSpent?: unknown;
                     draftDistance?: unknown;
+                    draftRerouteSourceSection?: unknown;
                   }
                 | undefined;
 
@@ -6486,6 +6554,10 @@ export function ShipDashboard() {
               const committedDistance =
                 typeof params?.distance === 'number' && Number.isFinite(params.distance) && Number.isInteger(params.distance) && params.distance >= 1
                   ? params.distance
+                  : null;
+              const committedRerouteSourceSection =
+                typeof params?.rerouteSourceSection === 'string' && VALID_SECTIONS_SET.has(params.rerouteSourceSection as ShipSection)
+                  ? (params.rerouteSourceSection as ShipSection)
                   : null;
 
               const draftDirectionRaw = (params as any)?.draftDirection as unknown;
@@ -6507,18 +6579,51 @@ export function ShipDashboard() {
                       draftDistanceRaw >= 1
                     ? draftDistanceRaw
                     : undefined;
+              const draftRerouteSourceSectionRaw = (params as any)?.draftRerouteSourceSection as unknown;
+              const draftRerouteSourceSection =
+                draftRerouteSourceSectionRaw === null
+                  ? null
+                  : typeof draftRerouteSourceSectionRaw === 'string' && VALID_SECTIONS_SET.has(draftRerouteSourceSectionRaw as ShipSection)
+                    ? (draftRerouteSourceSectionRaw as ShipSection)
+                    : undefined;
 
               const isEditing =
                 draftDirection !== undefined ||
                 draftPowerSpent !== undefined ||
-                draftDistance !== undefined;
+                draftDistance !== undefined ||
+                draftRerouteSourceSection !== undefined;
 
               const workingDirection = draftDirection ?? committedDirection;
               const workingPowerSpent = draftPowerSpent ?? committedPowerSpent;
               const workingDistance = draftDistance !== undefined ? draftDistance : committedDistance;
+              const workingRerouteSourceSection =
+                draftRerouteSourceSection !== undefined ? draftRerouteSourceSection : committedRerouteSourceSection;
               const previewDistance = workingDistance === null ? undefined : workingDistance;
 
-              const drivesPower = ship.sections[SHIP_SECTIONS.DRIVES]?.powerDice.reduce((sum, d) => sum + d, 0) ?? 0;
+              const maneuverPreviewPlayer = executionPreviewPlayerBeforeManeuver ?? player;
+              const maneuverPreviewShip = maneuverPreviewPlayer.ship;
+              const drivesPower = maneuverPreviewShip.sections[SHIP_SECTIONS.DRIVES]?.powerDice.reduce((sum, d) => sum + d, 0) ?? 0;
+              const canPilotFamilyReroute = canCrewRerouteOnePowerForManeuver(selectedCrew);
+              const requiresReroute = drivesPower < workingPowerSpent;
+              const rerouteDeficit = Math.max(0, workingPowerSpent - drivesPower);
+              const rerouteSourceOptions = (Object.values(SHIP_SECTIONS) as ShipSection[]).filter((sectionKey) => {
+                if (sectionKey === SHIP_SECTIONS.DRIVES) {
+                  return false;
+                }
+
+                const sectionState = maneuverPreviewShip.sections[sectionKey];
+                if (!sectionState || sectionState.hull <= 0) {
+                  return false;
+                }
+
+                const sectionPower = sectionState.powerDice.reduce((sum, die) => sum + die, 0);
+                if (sectionPower < 1) {
+                  return false;
+                }
+
+                const path = findRoutingPath(maneuverPreviewShip, sectionKey, SHIP_SECTIONS.DRIVES);
+                return !!path && path.length >= 2;
+              });
 
               let previewError: string | null = null;
               let previewSummary: { ring: number; space: number; acceleration: number; distanceMoved: number } | null = null;
@@ -6532,13 +6637,14 @@ export function ShipDashboard() {
 
               try {
                 const preview = previewManeuver(
-                  ship,
+                  maneuverPreviewShip,
                   selectedCrew,
                   workingDirection,
                   workingPowerSpent,
                   game.board,
                   previewDistance,
                   player.installedUpgrades,
+                  workingRerouteSourceSection,
                 );
                 previewSummary = {
                   ring: preview.updatedShip.position.ring,
@@ -6588,6 +6694,11 @@ export function ShipDashboard() {
                         Maneuver: <span className="font-semibold">{committedDirection}</span> | Power{' '}
                         <span className="font-semibold">{committedPowerSpent}</span> | Move{' '}
                         <span className="font-semibold">{committedDistance === null ? 'full' : committedDistance}</span>
+                        {committedRerouteSourceSection && (
+                          <>
+                            {' '}| Reroute <span className="font-semibold">{committedRerouteSourceSection}</span>
+                          </>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -6599,6 +6710,7 @@ export function ShipDashboard() {
                               draftDirection: committedDirection,
                               draftPowerSpent: committedPowerSpent,
                               draftDistance: committedDistance,
+                              draftRerouteSourceSection: committedRerouteSourceSection,
                             }, ui.selectedActionSlot);
                           }}
                         >
@@ -6640,6 +6752,7 @@ export function ShipDashboard() {
                                 draftDirection: undefined,
                                 draftPowerSpent: undefined,
                                 draftDistance: undefined,
+                                draftRerouteSourceSection: undefined,
                               }, ui.selectedActionSlot);
                             }}
                           >
@@ -6668,9 +6781,11 @@ export function ShipDashboard() {
                                 direction: workingDirection,
                                 powerSpent: workingPowerSpent,
                                 distance: workingDistance,
+                                rerouteSourceSection: workingRerouteSourceSection,
                                 draftDirection: undefined,
                                 draftPowerSpent: undefined,
                                 draftDistance: undefined,
+                                draftRerouteSourceSection: undefined,
                               }, ui.selectedActionSlot);
                             }}
                           >
@@ -6796,6 +6911,57 @@ export function ShipDashboard() {
                           )}
                         </div>
                       </div>
+
+                      {canPilotFamilyReroute && (
+                        <div className="space-y-1 rounded border border-sky-500/20 bg-sky-950/10 px-2 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-[10px] text-gravity-muted">Pilot-family reroute</div>
+                            <div className="text-[10px] text-slate-300">
+                              {requiresReroute
+                                ? rerouteDeficit === 1
+                                  ? 'Needs 1 power into Drives'
+                                  : `Needs ${rerouteDeficit} extra power`
+                                : 'Not required'}
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Pilot, Ace Pilot, First Officer, and Captain may reroute 1 power from another section into Drives for Maneuver.
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gravity-muted w-16">Source</span>
+                            <select
+                              value={workingRerouteSourceSection ?? ''}
+                              onChange={(e) => {
+                                setExecutionConfirmed(false);
+                                updatePlannedActionParameters(selectedCrew.id, {
+                                  draftRerouteSourceSection: e.target.value ? e.target.value : null,
+                                }, ui.selectedActionSlot);
+                              }}
+                              className="flex-1 px-1 py-0.5 text-[10px] bg-gravity-bg border border-gravity-border rounded"
+                            >
+                              <option value="">Select source...</option>
+                              {rerouteSourceOptions.map((sectionKey) => {
+                                const sectionPower = maneuverPreviewShip.sections[sectionKey]?.powerDice.reduce((sum, die) => sum + die, 0) ?? 0;
+                                return (
+                                  <option key={sectionKey} value={sectionKey}>
+                                    {sectionKey.replace('_', ' ').toUpperCase()} ({sectionPower} power)
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                          {requiresReroute && rerouteDeficit > 1 && (
+                            <div className="text-[10px] text-red-300">
+                              Drives are short by more than 1 power, so the maneuver will still be lost even with the pilot-family reroute.
+                            </div>
+                          )}
+                          {requiresReroute && rerouteDeficit === 1 && rerouteSourceOptions.length === 0 && (
+                            <div className="text-[10px] text-red-300">
+                              No powered section with an intact conduit path can currently reroute 1 power into Drives.
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
 

@@ -89,6 +89,7 @@ function CrewActionSlot({
   assignedAction,
   isPlanning,
   onActionSelect,
+  isActionDisabled,
   onClear,
   slotLabel,
 }: {
@@ -96,6 +97,7 @@ function CrewActionSlot({
   assignedAction: PlayerActionType | null;
   isPlanning: boolean;
   onActionSelect: (actionType: PlayerActionType) => void;
+  isActionDisabled?: (actionType: PlayerActionType) => boolean;
   onClear: () => void;
   slotLabel?: string;
 }) {
@@ -136,7 +138,11 @@ function CrewActionSlot({
             value={assignedAction ?? ''}
             onChange={(e) => {
               if (e.target.value) {
-                onActionSelect(e.target.value as PlayerActionType);
+                const nextActionType = e.target.value as PlayerActionType;
+                if (isActionDisabled?.(nextActionType)) {
+                  return;
+                }
+                onActionSelect(nextActionType);
               }
             }}
             className="w-full px-2 py-1.5 text-xs bg-gravity-bg/80 border border-gravity-border/50 rounded-md appearance-none cursor-pointer hover:border-gravity-muted transition-colors"
@@ -145,7 +151,7 @@ function CrewActionSlot({
             {UI_ACTION_TYPES.map((actionType) => {
               const config = ACTION_CONFIG[actionType];
               return (
-                <option key={actionType} value={actionType}>
+                <option key={actionType} value={actionType} disabled={isActionDisabled?.(actionType) === true}>
                   {config.label}
                 </option>
               );
@@ -371,6 +377,19 @@ export function ActionBar() {
 
   const maneuverActions = ui.plannedActions.filter((a) => a.type === 'maneuver');
   const isManeuverCountValid = maneuverActions.length <= 1;
+  const plannedManeuver = maneuverActions[0] ?? null;
+
+  const isActionTypeDisabledForSlot = (crewId: string, slot: 'primary' | 'bonus', actionType: PlayerActionType): boolean => {
+    if (actionType !== 'maneuver') {
+      return false;
+    }
+
+    if (!plannedManeuver) {
+      return false;
+    }
+
+    return !(plannedManeuver.crewId === crewId && getPlannedActionSlot(plannedManeuver) === slot);
+  };
 
   const allManeuversConfigured = maneuverActions.every((a) => {
     const params = a.parameters as any;
@@ -460,6 +479,7 @@ export function ActionBar() {
                 assignedAction={getAssignedAction(crew.id, 'primary')}
                 isPlanning={isPlanning}
                 onActionSelect={(actionType) => handleActionSelect(crew, actionType, 'primary')}
+                isActionDisabled={(actionType) => isActionTypeDisabledForSlot(crew.id, 'primary', actionType)}
                 onClear={() => removePlannedAction(crew.id, 'primary')}
               />
             );
@@ -510,6 +530,7 @@ export function ActionBar() {
                       assignedAction={getAssignedAction(beneficiary.id, 'bonus')}
                       isPlanning={isPlanning && canPlanBonusAction}
                       onActionSelect={(actionType) => handleActionSelect(beneficiary, actionType, 'bonus')}
+                      isActionDisabled={(actionType) => isActionTypeDisabledForSlot(beneficiary.id, 'bonus', actionType)}
                       onClear={() => removePlannedAction(beneficiary.id, 'bonus')}
                     />
                   </div>
@@ -541,6 +562,11 @@ export function ActionBar() {
           {showValidationMessage && getValidationMessage() && (
             <div className="text-[10px] text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/30">
               {getValidationMessage()}
+            </div>
+          )}
+          {!isExecution && ui.lastError && (
+            <div className="text-[10px] text-red-200 bg-red-950/30 px-2 py-1 rounded border border-red-500/30 max-w-[260px] text-right">
+              {ui.lastError}
             </div>
           )}
         </div>

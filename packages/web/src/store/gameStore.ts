@@ -15,6 +15,7 @@ import type {
   BotLogLevel,
   EngineInstrumentationOptions,
   GameState,
+  PlayerActionResolutionRecord,
   PlayerAction,
   PlayerState,
   ResourceType,
@@ -293,6 +294,7 @@ export type PlayerDiff = {
   pendingUpgradesGained: UpgradeCard[];
   installedUpgradesGained: UpgradeCard[];
   newScanDiscoveries: ScanDiscoveryRecord[];
+  actionResults: PlayerActionResolutionRecord[];
 };
 
 function computePlayerDiff(params: {
@@ -395,6 +397,15 @@ function computePlayerDiff(params: {
     );
   });
 
+  const previousActionResults = params.prevGame.lastActionResolutionRecordsByPlayerId?.[params.playerId] ?? [];
+  const nextActionResults = params.nextGame.lastActionResolutionRecordsByPlayerId?.[params.playerId] ?? [];
+  const previousActionResultKeys = new Set(
+    previousActionResults.map((record) => `${record.actionType}|${record.crewId}|${record.outcome}|${record.message}`),
+  );
+  const actionResults = nextActionResults.filter(
+    (record) => !previousActionResultKeys.has(`${record.actionType}|${record.crewId}|${record.outcome}|${record.message}`),
+  );
+
   return {
     fromTurn: params.prevGame.currentTurn,
     fromPhase: params.prevGame.turnPhase,
@@ -407,6 +418,7 @@ function computePlayerDiff(params: {
     pendingUpgradesGained,
     installedUpgradesGained,
     newScanDiscoveries,
+    actionResults,
   };
 }
 
@@ -716,6 +728,36 @@ export const useGameStore = create<GravityStore>((set, get) => ({
 
     const slotRaw = (action.parameters as Record<string, unknown> | undefined)?.uiSlot as unknown;
     const slot = slotRaw === 'bonus' ? 'bonus' : 'primary';
+
+    if (action.type === 'maneuver') {
+      const conflictingManeuver = ui.plannedActions.find((planned) => {
+        if (planned.type !== 'maneuver') {
+          return false;
+        }
+
+        const plannedSlotRaw = (planned.parameters as Record<string, unknown> | undefined)?.uiSlot as unknown;
+        const plannedSlot = plannedSlotRaw === 'bonus' ? 'bonus' : 'primary';
+
+        return !(planned.crewId === action.crewId && plannedSlot === slot);
+      });
+
+      if (conflictingManeuver) {
+        const conflictingSlotRaw = (conflictingManeuver.parameters as Record<string, unknown> | undefined)?.uiSlot as unknown;
+        const conflictingSlot = conflictingSlotRaw === 'bonus' ? 'bonus' : 'primary';
+
+        set((state) => ({
+          ui: {
+            ...state.ui,
+            lastError:
+              'Cannot add Maneuver because another Maneuver is already planned for this turn. ' +
+              `Root cause: crew "${conflictingManeuver.crewId}" already holds the ${conflictingSlot} maneuver slot. ` +
+              'Fix: Clear the existing Maneuver action before assigning Maneuver to a different crew or slot.',
+          },
+        }));
+
+        return;
+      }
+    }
 
     if (action.type === 'revive' && game && currentPlayerId) {
       const player = game.players.get(currentPlayerId);

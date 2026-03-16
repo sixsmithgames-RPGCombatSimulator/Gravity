@@ -210,6 +210,15 @@ export interface PlayerAction {
   parameters?: Record<string, unknown>;
 }
 
+export type PlayerActionResolutionOutcome = 'success' | 'lost';
+
+export interface PlayerActionResolutionRecord {
+  actionType: PlayerActionType;
+  crewId: string;
+  outcome: PlayerActionResolutionOutcome;
+  message: string;
+}
+
 export type TurnActions = Record<string, PlayerAction[]>;
 
 /**
@@ -320,6 +329,8 @@ export interface GameState {
 
   // Event runtime state (optional; used by specific event cards)
   eventState?: EventRuntimeState;
+
+  lastActionResolutionRecordsByPlayerId?: Record<string, PlayerActionResolutionRecord[]> | null;
 }
 
 /**

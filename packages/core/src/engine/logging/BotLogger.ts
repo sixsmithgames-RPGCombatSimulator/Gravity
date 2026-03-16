@@ -19,7 +19,7 @@ export interface BotActionResolutionLogEvent {
   playerId: string;
   crewId: string;
   actionType: PlayerActionType;
-  result: 'success' | 'failed_validation' | 'no_effect';
+  result: 'success' | 'failed_validation' | 'no_effect' | 'lost';
   details: string;
 }
 

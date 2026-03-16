@@ -27,6 +27,7 @@ import {
   ObjectType,
   PlayerAction,
   PlayerActionType,
+  PlayerActionResolutionRecord,
   AnySpaceObject,
   ScanDiscoveryRecord,
 } from '../models';
@@ -1876,6 +1877,7 @@ export function advanceTurn(game: GameState): GameState {
     ...game,
     currentTurn: game.currentTurn + 1,
     turnPhase: 'event',
+    lastActionResolutionRecordsByPlayerId: null,
   };
 }
 
@@ -2056,7 +2058,10 @@ export function applyPlayerActions(
   const cyberneticsBonusCrewIdByPlayerId = new Map<string, string | null>();
 
   // Process actions in rulebook order
-  let currentGame = game;
+  let currentGame: GameState = {
+    ...game,
+    lastActionResolutionRecordsByPlayerId: null,
+  };
   for (const actionType of actionOrder) {
     const actionsOfType = actionsByType.get(actionType);
     if (!actionsOfType || actionsOfType.length === 0) {
@@ -5316,6 +5321,198 @@ function applyConduitOverloadDamageForEdgeLoads(
   };
 }
 
+type ManeuverPreparationResult =
+  | {
+      outcome: 'ready';
+      shipAfterPreparation: Ship;
+    }
+  | {
+      outcome: 'lost';
+      message: string;
+    };
+
+function getSectionPowerTotal(ship: Ship, section: ShipSection): number {
+  const sectionState = ship.sections[section];
+  if (!sectionState) {
+    throw new Error(
+      'Cannot read section power because section does not exist on ship. ' +
+        `Root cause: no section found for "${section}" in ship.sections. ` +
+        'Fix: Ensure all SHIP_SECTIONS are initialized in the Ship.'
+    );
+  }
+
+  return sectionState.powerDice.reduce((sum, die) => sum + die, 0);
+}
+
+export function canCrewRerouteOnePowerForManeuver(crew: AnyCrew | Captain): boolean {
+  if (crew.type === 'basic') {
+    return crew.role === 'pilot';
+  }
+
+  if (crew.type === 'officer') {
+    return crew.role === 'ace_pilot' || crew.role === 'first_officer';
+  }
+
+  return crew.type === 'captain';
+}
+
+function prepareShipForManeuverPower(
+  ship: Ship,
+  crew: AnyCrew | Captain,
+  powerSpent: number,
+  rerouteSourceSectionRaw: unknown,
+  crewId: string,
+): ManeuverPreparationResult {
+  const drivesState = ship.sections[SHIP_SECTIONS.DRIVES];
+  if (!drivesState) {
+    throw new Error(
+      'Cannot resolve maneuver power because Drives section state was not found. ' +
+        `Root cause: ship.sections has no entry for section "${SHIP_SECTIONS.DRIVES}" (crew "${crewId}"). ` +
+        'Fix: Ensure all ship sections are initialized in ship.sections.'
+    );
+  }
+
+  if (drivesState.hull <= 0) {
+    throw new Error(
+      'Cannot resolve maneuver power because Drives section is damaged (hull is zero). ' +
+        `Root cause: Drives hull=${drivesState.hull} for crew "${crewId}". ` +
+        'Fix: Repair Drives hull to at least 1 before maneuvering.'
+    );
+  }
+
+  const drivesPower = getSectionPowerTotal(ship, SHIP_SECTIONS.DRIVES);
+  if (drivesPower >= powerSpent) {
+    return {
+      outcome: 'ready',
+      shipAfterPreparation: ship,
+    };
+  }
+
+  const deficit = powerSpent - drivesPower;
+  if (deficit > 1) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because Drives remained underpowered at resolution. ' +
+        `Root cause: crew "${crewId}" requested ${powerSpent} power but Drives had only ${drivesPower}, leaving a deficit of ${deficit}; pilot-family reroute can cover only 1 power. ` +
+        'Fix: Route or restore more power to Drives before maneuvering, or reduce the maneuver power spent.',
+    };
+  }
+
+  if (!canCrewRerouteOnePowerForManeuver(crew)) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because Drives remained underpowered at resolution. ' +
+        `Root cause: crew "${crewId}" requested ${powerSpent} power but Drives had only ${drivesPower}, and this crew does not have the pilot-family 1-power reroute ability. ` +
+        'Fix: Route or restore more power to Drives before maneuvering, or assign the maneuver to a Pilot, Ace Pilot, First Officer, or Captain.',
+    };
+  }
+
+  if (rerouteSourceSectionRaw === undefined || rerouteSourceSectionRaw === null || rerouteSourceSectionRaw === '') {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because Drives remained underpowered at resolution and no reroute source was selected. ' +
+        `Root cause: crew "${crewId}" requested ${powerSpent} power but Drives had only ${drivesPower}; this crew could have rerouted 1 power but action.parameters.rerouteSourceSection was empty. ` +
+        'Fix: Choose a powered source section to reroute 1 power into Drives, or route/restore power to Drives before maneuvering.',
+    };
+  }
+
+  if (typeof rerouteSourceSectionRaw !== 'string') {
+    throw new Error(
+      'Cannot resolve maneuver reroute because rerouteSourceSection is invalid. ' +
+        `Root cause: action.parameters.rerouteSourceSection is "${String(rerouteSourceSectionRaw)}" for crew "${crewId}". ` +
+        'Fix: Set action.parameters.rerouteSourceSection to a valid ship section key.'
+    );
+  }
+
+  const sectionKeys = Object.values(SHIP_SECTIONS) as ShipSection[];
+  const validSections = new Set<ShipSection>(sectionKeys);
+  if (!validSections.has(rerouteSourceSectionRaw as ShipSection)) {
+    throw new Error(
+      'Cannot resolve maneuver reroute because rerouteSourceSection is not recognized. ' +
+        `Root cause: action.parameters.rerouteSourceSection is "${rerouteSourceSectionRaw}" for crew "${crewId}". ` +
+        'Fix: Set action.parameters.rerouteSourceSection to a valid SHIP_SECTIONS key.'
+    );
+  }
+
+  const rerouteSourceSection = rerouteSourceSectionRaw as ShipSection;
+  if (rerouteSourceSection === SHIP_SECTIONS.DRIVES) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because the reroute source section was invalid. ' +
+        `Root cause: crew "${crewId}" selected Drives as the reroute source, but the pilot-family ability must draw 1 power from another section. ` +
+        'Fix: Choose a different powered ship section as the reroute source, or route/restore power to Drives before maneuvering.',
+    };
+  }
+
+  const sourceState = ship.sections[rerouteSourceSection];
+  if (!sourceState) {
+    throw new Error(
+      'Cannot resolve maneuver reroute because the source section state was not found. ' +
+        `Root cause: ship.sections has no entry for section "${rerouteSourceSection}" (crew "${crewId}"). ` +
+        'Fix: Ensure all ship sections are initialized in ship.sections.'
+    );
+  }
+
+  if (sourceState.hull <= 0) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because the reroute source section was damaged. ' +
+        `Root cause: crew "${crewId}" selected source section "${rerouteSourceSection}" but its hull is ${sourceState.hull}. ` +
+        'Fix: Repair that section, choose a different powered section, or route/restore power to Drives before maneuvering.',
+    };
+  }
+
+  const sourcePower = getSectionPowerTotal(ship, rerouteSourceSection);
+  if (sourcePower < 1) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because the reroute source section had no power to contribute. ' +
+        `Root cause: crew "${crewId}" selected source section "${rerouteSourceSection}" but it had only ${sourcePower} power. ` +
+        'Fix: Choose a powered section as the reroute source, or route/restore power to Drives before maneuvering.',
+    };
+  }
+
+  const conduitPath = findConduitPath(ship, rerouteSourceSection, SHIP_SECTIONS.DRIVES);
+  if (!conduitPath || conduitPath.length < 2) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because the selected reroute source could not reach Drives. ' +
+        `Root cause: no intact conduit path exists from "${rerouteSourceSection}" to "${SHIP_SECTIONS.DRIVES}" for crew "${crewId}". ` +
+        'Fix: Repair conduits, choose a different powered source section, or route/restore power to Drives before maneuvering.',
+    };
+  }
+
+  const shipAfterSpend = spendPowerInSection(ship, rerouteSourceSection, 1);
+  const shipAfterPreparation = routePowerWithConduitLimits(
+    shipAfterSpend,
+    rerouteSourceSection,
+    SHIP_SECTIONS.DRIVES,
+    1,
+  );
+
+  if (getSectionPowerTotal(shipAfterPreparation, SHIP_SECTIONS.DRIVES) < powerSpent) {
+    return {
+      outcome: 'lost',
+      message:
+        'Maneuver action was lost because Drives remained underpowered after the pilot-family reroute. ' +
+        `Root cause: crew "${crewId}" requested ${powerSpent} power and Drives still had only ${getSectionPowerTotal(shipAfterPreparation, SHIP_SECTIONS.DRIVES)} after rerouting 1 power from "${rerouteSourceSection}". ` +
+        'Fix: Route or restore more power to Drives before maneuvering, or reduce the maneuver power spent.',
+    };
+  }
+
+  return {
+    outcome: 'ready',
+    shipAfterPreparation,
+  };
+}
+
 /**
  * Resolve maneuver actions
  * Purpose: Process ship movement
@@ -5357,6 +5554,9 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
   }
 
   const updatedPlayers = new Map<string, PlayerState>();
+  const actionResolutionRecordsByPlayerId: Record<string, PlayerActionResolutionRecord[]> = {
+    ...(game.lastActionResolutionRecordsByPlayerId ?? {}),
+  };
 
   // Copy all players first
   for (const player of game.players.values()) {
@@ -5407,8 +5607,10 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
     workingPlayer = stimResult.player;
 
     // Get direction and power from parameters
-    const direction = (action.parameters?.direction as string) ?? 'forward';
-    const powerSpent = (action.parameters?.powerSpent as number) ?? 1;
+    const rawDirection = action.parameters?.direction;
+    const direction = typeof rawDirection === 'string' ? rawDirection : null;
+    const rawPowerSpent = action.parameters?.powerSpent;
+    const powerSpent = typeof rawPowerSpent === 'number' ? rawPowerSpent : null;
     const parameters = action.parameters as Record<string, unknown> | undefined;
     const hasRequestedDistance =
       !!parameters && Object.prototype.hasOwnProperty.call(parameters, 'distance');
@@ -5417,6 +5619,7 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
       typeof requestedDistanceRaw === 'number' && Number.isFinite(requestedDistanceRaw)
         ? requestedDistanceRaw
         : null;
+    const rerouteSourceSectionRaw = (parameters as any)?.rerouteSourceSection as unknown;
 
     if (
       direction !== 'forward' &&
@@ -5426,15 +5629,15 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
     ) {
       throw new Error(
         'Cannot resolve maneuver action because direction is unknown. ' +
-          `Root cause: action.parameters.direction is "${String(direction)}". ` +
+          `Root cause: action.parameters.direction is "${String(rawDirection)}". ` +
           'Fix: Set action.parameters.direction to one of: forward, backward, inward, outward.'
       );
     }
 
-    if (typeof powerSpent !== 'number' || !Number.isFinite(powerSpent) || powerSpent < 1) {
+    if (powerSpent === null || !Number.isFinite(powerSpent) || powerSpent < 1) {
       throw new Error(
         'Cannot resolve maneuver action because powerSpent is invalid. ' +
-          `Root cause: action.parameters.powerSpent is "${String(powerSpent)}". ` +
+          `Root cause: action.parameters.powerSpent is "${String(rawPowerSpent)}". ` +
           'Fix: Set action.parameters.powerSpent to a positive number.'
       );
     }
@@ -5457,35 +5660,29 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
       }
     }
 
-    const drivesState = workingPlayer.ship.sections[SHIP_SECTIONS.DRIVES];
-    if (!drivesState) {
-      throw new Error(
-        'Cannot resolve maneuver action because Drives section state was not found. ' +
-          `Root cause: ship.sections has no entry for section "${SHIP_SECTIONS.DRIVES}" (crew "${action.crewId}"). ` +
-          'Fix: Ensure all ship sections are initialized in ship.sections.'
-      );
-    }
-
-    if (drivesState.hull <= 0) {
-      throw new Error(
-        'Cannot resolve maneuver action because Drives section is damaged (hull is zero). ' +
-          `Root cause: Drives hull=${drivesState.hull} for crew "${action.crewId}". ` +
-          'Fix: Repair Drives hull to at least 1 before maneuvering.'
-      );
-    }
-
-    const drivesPower = drivesState.powerDice.reduce((sum, die) => sum + die, 0);
-    if (drivesPower < powerSpent) {
-      throw new Error(
-        'Cannot resolve maneuver action because Drives section does not have enough power to spend. ' +
-          `Root cause: requested ${powerSpent} power but Drives has only ${drivesPower}. ` +
-          'Fix: Restore or route more power to Drives before maneuvering.'
-      );
+    const maneuverPreparation = prepareShipForManeuverPower(
+      workingPlayer.ship,
+      crew,
+      powerSpent,
+      rerouteSourceSectionRaw,
+      action.crewId,
+    );
+    if (maneuverPreparation.outcome === 'lost') {
+      const existingRecords = actionResolutionRecordsByPlayerId[playerId] ?? [];
+      existingRecords.push({
+        actionType: 'maneuver',
+        crewId: action.crewId,
+        outcome: 'lost',
+        message: maneuverPreparation.message,
+      });
+      actionResolutionRecordsByPlayerId[playerId] = existingRecords;
+      updatedPlayers.set(playerId, workingPlayer);
+      continue;
     }
 
     // Section_Bonus: Bridge fully powered adds +1 maneuver acceleration.(source)
-    const bridgeFullyPoweredAtStart = ShipUtils.isFullyPowered(workingPlayer.ship, SHIP_SECTIONS.BRIDGE);
-    const workingShip = spendPowerInSection(workingPlayer.ship, SHIP_SECTIONS.DRIVES, powerSpent);
+    const bridgeFullyPoweredAtStart = ShipUtils.isFullyPowered(maneuverPreparation.shipAfterPreparation, SHIP_SECTIONS.BRIDGE);
+    const workingShip = spendPowerInSection(maneuverPreparation.shipAfterPreparation, SHIP_SECTIONS.DRIVES, powerSpent);
 
     // Calculate maximum acceleration
     let acceleration = powerSpent;
@@ -5502,10 +5699,10 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
       acceleration += 1;
     }
 
-    if (playerHasPoweredUpgrade(workingPlayer, workingPlayer.ship, 'inertia_control')) {
+    if (playerHasPoweredUpgrade(workingPlayer, maneuverPreparation.shipAfterPreparation, 'inertia_control')) {
       acceleration += 1;
     }
-    if (playerHasPoweredUpgrade(workingPlayer, workingPlayer.ship, 'ion_engine')) {
+    if (playerHasPoweredUpgrade(workingPlayer, maneuverPreparation.shipAfterPreparation, 'ion_engine')) {
       acceleration += 1;
     }
 
@@ -5532,9 +5729,12 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
     updatedPlayers.set(playerId, updatedPlayer);
   }
 
+  const hasActionResolutionRecords = Object.keys(actionResolutionRecordsByPlayerId).length > 0;
+
   return {
     ...game,
     players: updatedPlayers,
+    lastActionResolutionRecordsByPlayerId: hasActionResolutionRecords ? actionResolutionRecordsByPlayerId : null,
   };
 }
 
@@ -5710,6 +5910,7 @@ export function previewManeuver(
   board: Board,
   distance?: number,
   installedUpgrades?: UpgradeCard[],
+  rerouteSourceSection?: ShipSection | null,
 ): { shipAfterCost: Ship; updatedShip: Ship; acceleration: number; distanceMoved: number } {
   const actingSection = requireCrewLocationForAction(crew, 'maneuver', crew.id);
   requireActingSectionPoweredAndIntact(ship, actingSection, 'maneuver', crew.id);
@@ -5753,36 +5954,21 @@ export function previewManeuver(
     }
   }
 
-  const drivesState = ship.sections[SHIP_SECTIONS.DRIVES];
-  if (!drivesState) {
-    throw new Error(
-      'Cannot preview maneuver because Drives section state was not found. ' +
-        `Root cause: ship.sections has no entry for section "${SHIP_SECTIONS.DRIVES}" (crew "${crew.id}"). ` +
-        'Fix: Ensure all ship sections are initialized in ship.sections.'
-    );
-  }
-
-  if (drivesState.hull <= 0) {
-    throw new Error(
-      'Cannot preview maneuver because Drives section is damaged (hull is zero). ' +
-        `Root cause: Drives hull=${drivesState.hull} for crew "${crew.id}". ` +
-        'Fix: Repair Drives hull to at least 1 before maneuvering.'
-    );
-  }
-
-  const drivesPower = drivesState.powerDice.reduce((sum, die) => sum + die, 0);
-  if (drivesPower < powerSpent) {
-    throw new Error(
-      'Cannot preview maneuver because Drives section does not have enough power to spend. ' +
-        `Root cause: requested ${powerSpent} power but Drives has only ${drivesPower}. ` +
-        'Fix: Restore or route more power to Drives before maneuvering.'
-    );
+  const maneuverPreparation = prepareShipForManeuverPower(
+    ship,
+    crew,
+    powerSpent,
+    rerouteSourceSection,
+    crew.id,
+  );
+  if (maneuverPreparation.outcome === 'lost') {
+    throw new Error(maneuverPreparation.message);
   }
 
   // Section_Bonus: Bridge fully powered adds +1 acceleration for manual maneuvers.(source)
-  const bridgeFullyPoweredAtStart = ShipUtils.isFullyPowered(ship, SHIP_SECTIONS.BRIDGE);
+  const bridgeFullyPoweredAtStart = ShipUtils.isFullyPowered(maneuverPreparation.shipAfterPreparation, SHIP_SECTIONS.BRIDGE);
 
-  const shipAfterCost = spendPowerInSection(ship, SHIP_SECTIONS.DRIVES, powerSpent);
+  const shipAfterCost = spendPowerInSection(maneuverPreparation.shipAfterPreparation, SHIP_SECTIONS.DRIVES, powerSpent);
 
   let acceleration = powerSpent;
   if (bridgeFullyPoweredAtStart) {
