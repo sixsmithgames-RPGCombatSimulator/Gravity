@@ -299,6 +299,56 @@ describe('maneuver resolution', () => {
     expect(after.lastActionResolutionRecordsByPlayerId?.[playerId] ?? []).toHaveLength(0);
   });
 
+  it('resolves split-axis maneuver plans with the same destination as previewManeuver', () => {
+    const { game, playerId, otherPlayerId } = createScenario();
+    const player = game.players.get(playerId);
+    expect(player).toBeTruthy();
+    if (!player) {
+      return;
+    }
+
+    const preview = previewManeuver(
+      player.ship,
+      player.crew[0],
+      {
+        tangentialDirection: 'forward',
+        tangentialDistance: 1,
+        radialDirection: 'inward',
+        radialDistance: 2,
+      },
+      2,
+      game.board,
+      player.installedUpgrades,
+    );
+
+    const after = applyPlayerActions(game, {
+      [playerId]: [
+        {
+          playerId,
+          crewId: 'crew-1',
+          type: 'maneuver',
+          parameters: {
+            tangentialDirection: 'forward',
+            tangentialDistance: 1,
+            radialDirection: 'inward',
+            radialDistance: 2,
+            powerSpent: 2,
+          },
+        },
+      ],
+      [otherPlayerId]: [],
+    });
+
+    const afterPlayer = after.players.get(playerId);
+    expect(afterPlayer).toBeTruthy();
+    if (!afterPlayer) {
+      return;
+    }
+
+    expect(afterPlayer.ship.position).toEqual(preview.updatedShip.position);
+    expect(afterPlayer.ship.speed).toBe(preview.updatedShip.speed);
+  });
+
   it('previewManeuver uses the same pilot-family reroute rule as live resolution', () => {
     const ship = createFunctionalManeuverShip({
       sections: {

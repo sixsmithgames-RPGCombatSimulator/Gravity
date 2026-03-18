@@ -12,6 +12,7 @@ import {
 import type {
   Board,
   ShipPosition,
+  ShipSection,
   AnySpaceObject,
   AnyCrew,
   Captain,
@@ -20,6 +21,11 @@ import type {
   ScanDiscoveryRecord,
 } from '@gravity/core';
 import { getUpgradePowerStatus } from '../../utils/upgradePower';
+import {
+  hasConfiguredManeuverPlan,
+  resolveManeuverEditorState,
+  type DraftManeuverActionParameters,
+} from '../../utils/maneuver';
 
 /**
  * GameBoard component
@@ -44,6 +50,19 @@ const NUM_RINGS = 8;
 const MIN_RADIUS = 40;
 const MAX_RADIUS = CENTER - 8;
 const RING_SPACING = (MAX_RADIUS - MIN_RADIUS) / NUM_RINGS;
+const VALID_SECTIONS = [
+  SHIP_SECTIONS.BRIDGE,
+  SHIP_SECTIONS.ENGINEERING,
+  SHIP_SECTIONS.DRIVES,
+  SHIP_SECTIONS.MED_LAB,
+  SHIP_SECTIONS.SCI_LAB,
+  SHIP_SECTIONS.DEFENSE,
+] as ShipSection[];
+const VALID_SECTIONS_SET = new Set<ShipSection>(VALID_SECTIONS);
+
+function isValidShipSection(value: unknown): value is ShipSection {
+  return typeof value === 'string' && VALID_SECTIONS_SET.has(value as ShipSection);
+}
 
 /**
  * Animation configuration
@@ -612,73 +631,30 @@ export function GameBoard() {
       return null;
     }
 
-    const params = selectedCrewAction.parameters as
-      | { direction?: unknown; powerSpent?: unknown; distance?: unknown; draftDirection?: unknown; draftPowerSpent?: unknown; draftDistance?: unknown }
-      | undefined;
+    const maneuverState = resolveManeuverEditorState(
+      selectedCrewAction.parameters as DraftManeuverActionParameters | undefined,
+      isValidShipSection,
+    );
 
-    const draftDirection = typeof params?.draftDirection === 'string' ? params.draftDirection : null;
-    const draftPowerSpent = typeof params?.draftPowerSpent === 'number' ? params.draftPowerSpent : null;
-    const hasDraftDistance =
-      !!params && Object.prototype.hasOwnProperty.call(params as Record<string, unknown>, 'draftDistance');
-    const draftDistanceRaw = (params as any)?.draftDistance as unknown;
-    const draftDistance =
-      !hasDraftDistance
-        ? undefined
-        : draftDistanceRaw === null
-          ? null
-          : typeof draftDistanceRaw === 'number' &&
-              Number.isFinite(draftDistanceRaw) &&
-              Number.isInteger(draftDistanceRaw) &&
-              draftDistanceRaw >= 1
-            ? draftDistanceRaw
-            : null;
-    const committedDirection = typeof params?.direction === 'string' ? params.direction : null;
-    const committedPowerSpent = typeof params?.powerSpent === 'number' ? params.powerSpent : null;
-    const hasCommittedDistance =
-      !!params && Object.prototype.hasOwnProperty.call(params as Record<string, unknown>, 'distance');
-    const committedDistanceRaw = (params as any)?.distance as unknown;
-    const committedDistance =
-      !hasCommittedDistance
-        ? null
-        : committedDistanceRaw === null
-          ? null
-          : typeof committedDistanceRaw === 'number' &&
-              Number.isFinite(committedDistanceRaw) &&
-              Number.isInteger(committedDistanceRaw) &&
-              committedDistanceRaw >= 1
-            ? committedDistanceRaw
-            : null;
-
-    const direction = draftDirection ?? committedDirection;
-    const powerSpent = draftPowerSpent ?? committedPowerSpent;
-    const distance = draftDistance !== undefined ? draftDistance : committedDistance;
-    const previewDistance = distance === null ? undefined : distance;
-
-    if (!direction || typeof powerSpent !== 'number') {
+    if (
+      !hasConfiguredManeuverPlan(maneuverState.workingPlan) ||
+      typeof maneuverState.workingPowerSpent !== 'number' ||
+      !Number.isFinite(maneuverState.workingPowerSpent) ||
+      maneuverState.workingPowerSpent < 1
+    ) {
       return null;
     }
 
     try {
-      const preview =
-        typeof previewDistance === 'number'
-          ? previewManeuver(
-              player.ship,
-              selectedCrew,
-              direction,
-              powerSpent,
-              game.board,
-              previewDistance,
-              player.installedUpgrades,
-            )
-          : previewManeuver(
-              player.ship,
-              selectedCrew,
-              direction,
-              powerSpent,
-              game.board,
-              undefined,
-              player.installedUpgrades,
-            );
+      const preview = previewManeuver(
+        player.ship,
+        selectedCrew,
+        maneuverState.workingPlan,
+        maneuverState.workingPowerSpent,
+        game.board,
+        player.installedUpgrades,
+        maneuverState.workingRerouteSourceSection,
+      );
       return {
         from: player.ship.position,
         to: preview.updatedShip.position,

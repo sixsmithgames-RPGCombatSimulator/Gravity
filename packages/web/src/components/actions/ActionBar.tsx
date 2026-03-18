@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import type { PlayerActionType, AnyCrew, Captain, PlayerAction } from '@gravity/core';
+import { SHIP_SECTIONS } from '@gravity/core';
+import type { PlayerActionType, AnyCrew, Captain, PlayerAction, ShipSection } from '@gravity/core';
 import { getUpgradePowerStatus } from '../../utils/upgradePower';
+import {
+  buildCommittedManeuverParameters,
+  hasConfiguredManeuverPlan,
+  resolveManeuverEditorState,
+  type DraftManeuverActionParameters,
+} from '../../utils/maneuver';
 
 /**
  * ActionBar component
@@ -80,6 +87,20 @@ const UI_ACTION_TYPES: PlayerActionType[] = ACTION_TYPES.filter((type) =>
   type === 'assemble' ||
   type === 'integrate',
 );
+
+const VALID_SECTIONS = [
+  SHIP_SECTIONS.BRIDGE,
+  SHIP_SECTIONS.ENGINEERING,
+  SHIP_SECTIONS.DRIVES,
+  SHIP_SECTIONS.MED_LAB,
+  SHIP_SECTIONS.SCI_LAB,
+  SHIP_SECTIONS.DEFENSE,
+] as ShipSection[];
+const VALID_SECTIONS_SET = new Set<ShipSection>(VALID_SECTIONS);
+
+function isValidShipSection(value: unknown): value is ShipSection {
+  return typeof value === 'string' && VALID_SECTIONS_SET.has(value as ShipSection);
+}
 
 /**
  * Crew action slot component
@@ -289,11 +310,16 @@ export function ActionBar() {
     }
 
     if (actionType === 'maneuver') {
-      // Default to forward 1; user can change in execution phase
-      baseAction.parameters = {
-        direction: 'forward',
-        powerSpent: 1,
-      };
+      baseAction.parameters = buildCommittedManeuverParameters(
+        {
+          tangentialDirection: 'forward',
+          tangentialDistance: null,
+          radialDirection: null,
+          radialDistance: null,
+        },
+        1,
+        null,
+      ) as unknown as Record<string, unknown>;
     }
 
     if (actionType === 'assemble') {
@@ -392,8 +418,17 @@ export function ActionBar() {
   };
 
   const allManeuversConfigured = maneuverActions.every((a) => {
-    const params = a.parameters as any;
-    return params?.direction && typeof params?.powerSpent === 'number';
+    const maneuverState = resolveManeuverEditorState(
+      a.parameters as DraftManeuverActionParameters | undefined,
+      isValidShipSection,
+    );
+    return (
+      hasConfiguredManeuverPlan(maneuverState.committedPlan) &&
+      typeof maneuverState.committedPowerSpent === 'number' &&
+      Number.isFinite(maneuverState.committedPowerSpent) &&
+      maneuverState.committedPowerSpent >= 1 &&
+      !maneuverState.isEditing
+    );
   });
 
   const boardTargetActions = ui.plannedActions.filter(

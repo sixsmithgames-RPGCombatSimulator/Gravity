@@ -188,6 +188,36 @@ function describeReviveResolution(
   };
 }
 
+function describeManeuverPlan(action: PlayerAction): string {
+  const tangentialDirection = action.parameters?.tangentialDirection;
+  const tangentialDistance = action.parameters?.tangentialDistance;
+  const radialDirection = action.parameters?.radialDirection;
+  const radialDistance = action.parameters?.radialDistance;
+  const legacyDirection = action.parameters?.direction;
+  const legacyDistance = action.parameters?.distance;
+  const parts: string[] = [];
+
+  if (typeof tangentialDirection === 'string') {
+    parts.push(
+      `tangential ${tangentialDirection} ${typeof tangentialDistance === 'number' ? tangentialDistance : 'full remaining'}`,
+    );
+  }
+
+  if (typeof radialDirection === 'string') {
+    parts.push(`radial ${radialDirection} ${typeof radialDistance === 'number' ? radialDistance : 'full remaining'}`);
+  }
+
+  if (parts.length > 0) {
+    return parts.join(' + ');
+  }
+
+  if (typeof legacyDirection === 'string') {
+    return `${legacyDirection} ${typeof legacyDistance === 'number' ? legacyDistance : 'full remaining'}`;
+  }
+
+  return 'unknown plan';
+}
+
 function describeManeuverResolution(
   nextGame: GameState,
   previousPlayer: PlayerState,
@@ -207,8 +237,7 @@ function describeManeuverResolution(
     };
   }
 
-  const directionRaw = action.parameters?.direction;
-  const direction = typeof directionRaw === 'string' ? directionRaw : 'unknown';
+  const maneuverPlan = describeManeuverPlan(action);
   const powerSpentRaw = action.parameters?.powerSpent;
   const powerSpent = typeof powerSpentRaw === 'number' ? powerSpentRaw : null;
   const previousDrivesPower = getSectionPower(previousPlayer, SHIP_SECTIONS.DRIVES);
@@ -226,7 +255,7 @@ function describeManeuverResolution(
   return {
     result: changed ? 'success' : 'no_effect',
     details:
-      `Maneuver direction "${direction}" with powerSpent=${powerSpentText}.` +
+      `Maneuver plan "${maneuverPlan}" with powerSpent=${powerSpentText}.` +
       ` Position (${previousPosition.ring}, ${previousPosition.space}) -> (${nextPosition.ring}, ${nextPosition.space}).` +
       ` Drives power ${previousDrivesPower} -> ${nextDrivesPower}.`,
   };
@@ -314,8 +343,8 @@ function getSectionStateOrThrow(player: PlayerState, section: ShipSection) {
 }
 
 function getSectionPower(player: PlayerState, section: ShipSection): number {
-  const sectionState = getSectionStateOrThrow(player, section);
-  return sectionState.powerDice.reduce((sum, die) => sum + die, 0);
+  const dice = player.ship.sections[section]?.powerDice ?? [];
+  return dice.reduce((sum, die) => sum + die, 0);
 }
 
 function getTotalShipPower(player: PlayerState): number {

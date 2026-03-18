@@ -29,7 +29,7 @@ import type {
 import { createMockGame, type Difficulty } from '../utils/mockGame';
 import { getUpgradePowerStatus } from '../utils/upgradePower';
 
-const BOT_EXECUTION_ENABLED = true;
+const BOT_EXECUTION_ENABLED_DEFAULT = false;
 const BOT_LOG_LEVEL: BotLogLevel = import.meta.env.DEV ? 'verbose' : 'off';
 const BOT_CONSOLE_LOGGER = new ConsoleBotLogger();
 
@@ -425,14 +425,16 @@ function computePlayerDiff(params: {
 /**
  * Complete store state combining game and UI state
  */
-interface GravityStore {
-  // === Game State ===
-  /** Current game state from engine (null if no game loaded) */
+export interface GravityStore {
+  // === State ===
+  /** Current game state */
   game: GameState | null;
-  /** Current player's ID */
+  /** Current player id */
   currentPlayerId: string | null;
-  /** Selected difficulty for new games */
-  difficulty: Difficulty;
+  /** Difficulty setting */
+  difficulty: 'easy' | 'normal' | 'hard';
+  /** Whether the local player has handed control to the bot */
+  botPlayerEnabled: boolean;
 
   // === UI State ===
   ui: UIState;
@@ -442,8 +444,10 @@ interface GravityStore {
   setGame: (game: GameState | null) => void;
   /** Set current player */
   setCurrentPlayer: (playerId: string | null) => void;
-  /** Set desired difficulty */
-  setDifficulty: (difficulty: Difficulty) => void;
+  /** Set difficulty */
+  setDifficulty: (difficulty: GravityStore['difficulty']) => void;
+  /** Enable/disable bot control for the local player */
+  setBotPlayerEnabled: (enabled: boolean) => void;
   /** Update game state after turn processing */
   updateGameState: (game: GameState) => void;
   /** Start a brand new game using engine-driven mock setup */
@@ -592,6 +596,7 @@ export const useGameStore = create<GravityStore>((set, get) => ({
   game: null,
   currentPlayerId: null,
   difficulty: 'hard',
+  botPlayerEnabled: BOT_EXECUTION_ENABLED_DEFAULT,
   ui: initialUIState,
 
   // === Game Actions ===
@@ -606,6 +611,8 @@ export const useGameStore = create<GravityStore>((set, get) => ({
   setCurrentPlayer: (playerId) => set({ currentPlayerId: playerId }),
 
   setDifficulty: (difficulty) => set({ difficulty }),
+
+  setBotPlayerEnabled: (enabled) => set({ botPlayerEnabled: enabled }),
 
   updateGameState: (game) => set((state) => ({
     game,
@@ -1092,7 +1099,7 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
       };
 
       const botInstrumentationOptions = getBotInstrumentationOptions();
-      const shouldExecuteBotActions = BOT_EXECUTION_ENABLED && game.turnPhase === 'action_execution';
+      const shouldExecuteBotActions = get().botPlayerEnabled && game.turnPhase === 'action_execution';
       const botActions: TurnActions = shouldExecuteBotActions
         ? generateAllBotActionsFromEngine(game, botInstrumentationOptions)
         : getDisabledBotActions(game);

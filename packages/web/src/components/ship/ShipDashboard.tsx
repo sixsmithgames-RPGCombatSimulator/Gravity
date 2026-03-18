@@ -24,6 +24,7 @@ import {
 } from '@gravity/core';
 import type {
   Board,
+  ManeuverMotionPlan,
   ShipSection,
   ShipSectionState,
   AnyCrew,
@@ -37,6 +38,13 @@ import type {
 } from '@gravity/core';
 import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import {
+  buildCommittedManeuverParameters,
+  buildDraftManeuverParameters,
+  hasConfiguredManeuverPlan,
+  resolveManeuverEditorState,
+  type DraftManeuverActionParameters,
+} from '../../utils/maneuver';
 
 /**
  * ShipDashboard component
@@ -102,13 +110,48 @@ function getUpgradeMechanicsSummary(upgradeId: string): string | null {
   return UPGRADE_MECHANICS_SUMMARY[upgradeId] ?? null;
 }
 
-const VALID_SECTIONS_SET = new Set(Object.values(SHIP_SECTIONS) as ShipSection[]);
+const VALID_SECTIONS = [
+  SHIP_SECTIONS.BRIDGE,
+  SHIP_SECTIONS.ENGINEERING,
+  SHIP_SECTIONS.DRIVES,
+  SHIP_SECTIONS.MED_LAB,
+  SHIP_SECTIONS.SCI_LAB,
+  SHIP_SECTIONS.DEFENSE,
+] as ShipSection[];
+const VALID_SECTIONS_SET = new Set<ShipSection>(VALID_SECTIONS);
 const PRE_MANEUVER_ACTION_TYPES = new Set<PlayerAction['type']>(['restore', 'route', 'revive', 'repair']);
 
 type HazardContributor = { id: string; ring: number; space: number; distance: number };
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function isValidShipSection(value: unknown): value is ShipSection {
+  return typeof value === 'string' && VALID_SECTIONS_SET.has(value as ShipSection);
+}
+
+function formatManeuverAxisSummary(
+  axisLabel: string,
+  direction: ManeuverMotionPlan['tangentialDirection'] | ManeuverMotionPlan['radialDirection'],
+  distance: number | null | undefined,
+): string | null {
+  if (!direction) {
+    return null;
+  }
+
+  const directionLabel = direction.charAt(0).toUpperCase() + direction.slice(1);
+  const distanceLabel = distance === null || distance === undefined ? 'full remaining' : String(distance);
+  return `${axisLabel}: ${directionLabel} ${distanceLabel}`;
+}
+
+function formatManeuverPlanSummary(plan: ManeuverMotionPlan): string {
+  const parts = [
+    formatManeuverAxisSummary('Tangential', plan.tangentialDirection ?? null, plan.tangentialDistance),
+    formatManeuverAxisSummary('Radial', plan.radialDirection ?? null, plan.radialDistance),
+  ].filter((value): value is string => value !== null);
+
+  return parts.length > 0 ? parts.join(' | ') : 'No movement selected';
 }
 
 function buildSafeExecutionPreviewActions(
@@ -190,12 +233,19 @@ function buildSafeExecutionPreviewActions(
     }
 
     if (action.type === 'maneuver') {
-      const direction = (parameters as any).direction as unknown;
-      const powerSpent = (parameters as any).powerSpent as unknown;
-      if (!isNonEmptyString(direction)) {
+      const maneuverState = resolveManeuverEditorState(
+        parameters as DraftManeuverActionParameters | undefined,
+        isValidShipSection,
+      );
+      if (!hasConfiguredManeuverPlan(maneuverState.committedPlan)) {
         continue;
       }
-      if (typeof powerSpent !== 'number' || !Number.isFinite(powerSpent) || powerSpent < 1) {
+      if (
+        typeof maneuverState.committedPowerSpent !== 'number' ||
+        !Number.isFinite(maneuverState.committedPowerSpent) ||
+        maneuverState.committedPowerSpent < 1 ||
+        maneuverState.isEditing
+      ) {
         continue;
       }
     }
@@ -3878,37 +3928,46 @@ export function ShipDashboard() {
   const maneuverActions = ui.plannedActions.filter((a) => a.type === 'maneuver');
   const isManeuverCountValid = maneuverActions.length <= 1;
   const allManeuversConfigured = maneuverActions.every((a) => {
-    const dir = (a.parameters as any)?.direction as string | undefined;
-    const pwr = (a.parameters as any)?.powerSpent as number | undefined;
-    const draftDir = (a.parameters as any)?.draftDirection as unknown;
-    const draftPwr = (a.parameters as any)?.draftPowerSpent as unknown;
-    const hasDraft = typeof draftDir === 'string' || typeof draftPwr === 'number';
-    const dirOk = dir === 'forward' || dir === 'backward' || dir === 'inward' || dir === 'outward';
-    const pwrOk = typeof pwr === 'number' && Number.isFinite(pwr) && pwr >= 1;
-    return dirOk && pwrOk && !hasDraft;
+    const maneuverState = resolveManeuverEditorState(
+      a.parameters as DraftManeuverActionParameters | undefined,
+      isValidShipSection,
+    );
+    return (
+      hasConfiguredManeuverPlan(maneuverState.committedPlan) &&
+      typeof maneuverState.committedPowerSpent === 'number' &&
+      Number.isFinite(maneuverState.committedPowerSpent) &&
+      maneuverState.committedPowerSpent >= 1 &&
+      !maneuverState.isEditing
+    );
   });
 
   const firstManeuverNeedingConfigCrewId = maneuverActions.find((a) => {
-    const dir = (a.parameters as any)?.direction as string | undefined;
-    const pwr = (a.parameters as any)?.powerSpent as number | undefined;
-    const draftDir = (a.parameters as any)?.draftDirection as unknown;
-    const draftPwr = (a.parameters as any)?.draftPowerSpent as unknown;
-    const hasDraft = typeof draftDir === 'string' || typeof draftPwr === 'number';
-    const dirOk = dir === 'forward' || dir === 'backward' || dir === 'inward' || dir === 'outward';
-    const pwrOk = typeof pwr === 'number' && Number.isFinite(pwr) && pwr >= 1;
-    return !(dirOk && pwrOk) || hasDraft;
+    const maneuverState = resolveManeuverEditorState(
+      a.parameters as DraftManeuverActionParameters | undefined,
+      isValidShipSection,
+    );
+    return !(
+      hasConfiguredManeuverPlan(maneuverState.committedPlan) &&
+      typeof maneuverState.committedPowerSpent === 'number' &&
+      Number.isFinite(maneuverState.committedPowerSpent) &&
+      maneuverState.committedPowerSpent >= 1 &&
+      !maneuverState.isEditing
+    );
   })?.crewId ?? null;
 
   const firstManeuverNeedingConfigSlot = (() => {
     const action = maneuverActions.find((a) => {
-      const dir = (a.parameters as any)?.direction as string | undefined;
-      const pwr = (a.parameters as any)?.powerSpent as number | undefined;
-      const draftDir = (a.parameters as any)?.draftDirection as unknown;
-      const draftPwr = (a.parameters as any)?.draftPowerSpent as unknown;
-      const hasDraft = typeof draftDir === 'string' || typeof draftPwr === 'number';
-      const dirOk = dir === 'forward' || dir === 'backward' || dir === 'inward' || dir === 'outward';
-      const pwrOk = typeof pwr === 'number' && Number.isFinite(pwr) && pwr >= 1;
-      return !(dirOk && pwrOk) || hasDraft;
+      const maneuverState = resolveManeuverEditorState(
+        a.parameters as DraftManeuverActionParameters | undefined,
+        isValidShipSection,
+      );
+      return !(
+        hasConfiguredManeuverPlan(maneuverState.committedPlan) &&
+        typeof maneuverState.committedPowerSpent === 'number' &&
+        Number.isFinite(maneuverState.committedPowerSpent) &&
+        maneuverState.committedPowerSpent >= 1 &&
+        !maneuverState.isEditing
+      );
     });
     return action ? getPlannedActionSlot(action) : null;
   })();
@@ -6532,80 +6591,26 @@ export function ShipDashboard() {
 
           {selectedManeuverAction && (
             (() => {
-              const params = selectedManeuverAction.parameters as
-                | {
-                    direction?: unknown;
-                    powerSpent?: unknown;
-                    distance?: unknown;
-                    rerouteSourceSection?: unknown;
-                    draftDirection?: unknown;
-                    draftPowerSpent?: unknown;
-                    draftDistance?: unknown;
-                    draftRerouteSourceSection?: unknown;
-                  }
-                | undefined;
-
-              const committedDirection =
-                typeof params?.direction === 'string' ? params.direction : 'forward';
-              const committedPowerSpent =
-                typeof params?.powerSpent === 'number' && Number.isFinite(params.powerSpent)
-                  ? params.powerSpent
-                  : 1;
-              const committedDistance =
-                typeof params?.distance === 'number' && Number.isFinite(params.distance) && Number.isInteger(params.distance) && params.distance >= 1
-                  ? params.distance
-                  : null;
-              const committedRerouteSourceSection =
-                typeof params?.rerouteSourceSection === 'string' && VALID_SECTIONS_SET.has(params.rerouteSourceSection as ShipSection)
-                  ? (params.rerouteSourceSection as ShipSection)
-                  : null;
-
-              const draftDirectionRaw = (params as any)?.draftDirection as unknown;
-              const draftDirection = typeof draftDirectionRaw === 'string' ? draftDirectionRaw : undefined;
-
-              const draftPowerSpentRaw = (params as any)?.draftPowerSpent as unknown;
-              const draftPowerSpent =
-                typeof draftPowerSpentRaw === 'number' && Number.isFinite(draftPowerSpentRaw)
-                  ? draftPowerSpentRaw
-                  : undefined;
-
-              const draftDistanceRaw = (params as any)?.draftDistance as unknown;
-              const draftDistance =
-                draftDistanceRaw === null
-                  ? null
-                  : typeof draftDistanceRaw === 'number' &&
-                      Number.isFinite(draftDistanceRaw) &&
-                      Number.isInteger(draftDistanceRaw) &&
-                      draftDistanceRaw >= 1
-                    ? draftDistanceRaw
-                    : undefined;
-              const draftRerouteSourceSectionRaw = (params as any)?.draftRerouteSourceSection as unknown;
-              const draftRerouteSourceSection =
-                draftRerouteSourceSectionRaw === null
-                  ? null
-                  : typeof draftRerouteSourceSectionRaw === 'string' && VALID_SECTIONS_SET.has(draftRerouteSourceSectionRaw as ShipSection)
-                    ? (draftRerouteSourceSectionRaw as ShipSection)
-                    : undefined;
-
-              const isEditing =
-                draftDirection !== undefined ||
-                draftPowerSpent !== undefined ||
-                draftDistance !== undefined ||
-                draftRerouteSourceSection !== undefined;
-
-              const workingDirection = draftDirection ?? committedDirection;
-              const workingPowerSpent = draftPowerSpent ?? committedPowerSpent;
-              const workingDistance = draftDistance !== undefined ? draftDistance : committedDistance;
-              const workingRerouteSourceSection =
-                draftRerouteSourceSection !== undefined ? draftRerouteSourceSection : committedRerouteSourceSection;
-              const previewDistance = workingDistance === null ? undefined : workingDistance;
+              const params = selectedManeuverAction.parameters as DraftManeuverActionParameters | undefined;
+              const maneuverState = resolveManeuverEditorState(params, isValidShipSection);
+              const committedPlan = maneuverState.committedPlan;
+              const committedPowerSpent = maneuverState.committedPowerSpent;
+              const committedRerouteSourceSection = maneuverState.committedRerouteSourceSection;
+              const workingPlan = maneuverState.workingPlan;
+              const workingPowerSpent = maneuverState.workingPowerSpent;
+              const workingRerouteSourceSection = maneuverState.workingRerouteSourceSection;
+              const isEditing = maneuverState.isEditing;
 
               const maneuverPreviewPlayer = executionPreviewPlayerBeforeManeuver ?? player;
               const maneuverPreviewShip = maneuverPreviewPlayer.ship;
               const drivesPower = maneuverPreviewShip.sections[SHIP_SECTIONS.DRIVES]?.powerDice.reduce((sum, d) => sum + d, 0) ?? 0;
               const canPilotFamilyReroute = canCrewRerouteOnePowerForManeuver(selectedCrew);
-              const requiresReroute = drivesPower < workingPowerSpent;
-              const rerouteDeficit = Math.max(0, workingPowerSpent - drivesPower);
+              const powerOk =
+                typeof workingPowerSpent === 'number' &&
+                Number.isFinite(workingPowerSpent) &&
+                workingPowerSpent >= 1;
+              const requiresReroute = powerOk ? drivesPower < workingPowerSpent : false;
+              const rerouteDeficit = powerOk ? Math.max(0, workingPowerSpent - drivesPower) : 0;
               const rerouteSourceOptions = (Object.values(SHIP_SECTIONS) as ShipSection[]).filter((sectionKey) => {
                 if (sectionKey === SHIP_SECTIONS.DRIVES) {
                   return false;
@@ -6624,6 +6629,60 @@ export function ShipDashboard() {
                 const path = findRoutingPath(maneuverPreviewShip, sectionKey, SHIP_SECTIONS.DRIVES);
                 return !!path && path.length >= 2;
               });
+              const maneuverBonus =
+                selectedCrew.type === 'basic'
+                  ? selectedCrew.role === 'pilot'
+                    ? 1
+                    : 0
+                  : selectedCrew.type === 'officer'
+                    ? selectedCrew.role === 'ace_pilot'
+                      ? 2
+                      : selectedCrew.role === 'first_officer'
+                        ? 1
+                      : 0
+                    : 1;
+              const technologistBonus =
+                maneuverPreviewPlayer.captain.captainType === 'technologist' && selectedCrew.type === 'basic' && maneuverBonus > 0
+                  ? 1
+                  : 0;
+              const bridgePowerBonus = ShipUtils.isFullyPowered(maneuverPreviewShip, SHIP_SECTIONS.BRIDGE) ? 1 : 0;
+              const inertiaControlBonus = maneuverPreviewPlayer.installedUpgrades.some(
+                (upgrade) => upgrade.id === 'inertia_control' && getUpgradePowerStatus(upgrade, maneuverPreviewShip).isPowered,
+              )
+                ? 1
+                : 0;
+              const ionEngineBonus = maneuverPreviewPlayer.installedUpgrades.some(
+                (upgrade) => upgrade.id === 'ion_engine' && getUpgradePowerStatus(upgrade, maneuverPreviewShip).isPowered,
+              )
+                ? 1
+                : 0;
+              const accelerationEstimate =
+                powerOk
+                  ? workingPowerSpent + bridgePowerBonus + maneuverBonus + technologistBonus + inertiaControlBonus + ionEngineBonus
+                  : null;
+              const selectedAxisCount =
+                (workingPlan.tangentialDirection ? 1 : 0) +
+                (workingPlan.radialDirection ? 1 : 0);
+              const specifiedDistanceTotal =
+                (workingPlan.tangentialDistance ?? 0) +
+                (workingPlan.radialDistance ?? 0);
+              const ambiguousDistanceAllocation =
+                selectedAxisCount === 2 &&
+                workingPlan.tangentialDistance == null &&
+                workingPlan.radialDistance == null;
+              const distanceOverBudget =
+                accelerationEstimate !== null && specifiedDistanceTotal > accelerationEstimate;
+              const remainingAcceleration =
+                accelerationEstimate === null ? null : Math.max(0, accelerationEstimate - specifiedDistanceTotal);
+
+              const updateDraftPlan = (nextPlan: ManeuverMotionPlan) => {
+                setExecutionConfirmed(false);
+                updatePlannedActionParameters(
+                  selectedCrew.id,
+                  buildDraftManeuverParameters(nextPlan) as unknown as Record<string, unknown>,
+                  ui.selectedActionSlot,
+                );
+              };
 
               let previewError: string | null = null;
               let previewSummary: { ring: number; space: number; acceleration: number; distanceMoved: number } | null = null;
@@ -6635,65 +6694,61 @@ export function ShipDashboard() {
                   }
                 | null = null;
 
-              try {
-                const preview = previewManeuver(
-                  maneuverPreviewShip,
-                  selectedCrew,
-                  workingDirection,
-                  workingPowerSpent,
-                  game.board,
-                  previewDistance,
-                  player.installedUpgrades,
-                  workingRerouteSourceSection,
-                );
-                previewSummary = {
-                  ring: preview.updatedShip.position.ring,
-                  space: preview.updatedShip.position.space,
-                  acceleration: preview.acceleration,
-                  distanceMoved: preview.distanceMoved,
-                };
+              if (ambiguousDistanceAllocation) {
+                previewError =
+                  'Cannot preview maneuver because both axes are set to full remaining distance. ' +
+                  'Root cause: tangential and radial movement were both selected without assigning at least one explicit distance. ' +
+                  'Fix: Enter a distance for one axis, then leave the other on Full Remaining if desired.';
+              } else if (distanceOverBudget) {
+                previewError =
+                  'Cannot preview maneuver because requested movement exceeds the available acceleration. ' +
+                  `Root cause: specified ${specifiedDistanceTotal} total movement but only ${accelerationEstimate ?? 0} acceleration is available. ` +
+                  'Fix: Reduce one of the axis distances or spend more maneuver power.';
+              } else if (powerOk && workingPowerSpent !== null && hasConfiguredManeuverPlan(workingPlan)) {
+                try {
+                  const preview = previewManeuver(
+                    maneuverPreviewShip,
+                    selectedCrew,
+                    workingPlan,
+                    workingPowerSpent,
+                    game.board,
+                    maneuverPreviewPlayer.installedUpgrades,
+                    workingRerouteSourceSection,
+                  );
+                  previewSummary = {
+                    ring: preview.updatedShip.position.ring,
+                    space: preview.updatedShip.position.space,
+                    acceleration: preview.acceleration,
+                    distanceMoved: preview.distanceMoved,
+                  };
 
-                const destination = preview.updatedShip.position;
-                const ringColor = BoardUtils.getRingColor(destination.ring);
-                const environment = computeEnvironmentDamageForPosition(destination, game.board);
-                const hazard = computeHazardDamageForPosition(destination, game.board);
-                previewDamageSummary = {
-                  ringColor,
-                  environment,
-                  hazard,
-                };
-              } catch (e) {
-                previewError = e instanceof Error ? e.message : String(e);
+                  const destination = preview.updatedShip.position;
+                  const ringColor = BoardUtils.getRingColor(destination.ring);
+                  const environment = computeEnvironmentDamageForPosition(destination, game.board);
+                  const hazard = computeHazardDamageForPosition(destination, game.board);
+                  previewDamageSummary = {
+                    ringColor,
+                    environment,
+                    hazard,
+                  };
+                } catch (e) {
+                  previewError = e instanceof Error ? e.message : String(e);
+                }
               }
-
-              const directionOk =
-                workingDirection === 'forward' ||
-                workingDirection === 'backward' ||
-                workingDirection === 'inward' ||
-                workingDirection === 'outward';
-
-              const powerOk =
-                typeof workingPowerSpent === 'number' &&
-                Number.isFinite(workingPowerSpent) &&
-                workingPowerSpent >= 1;
-
-              const distanceOk =
-                workingDistance === null ||
-                (typeof workingDistance === 'number' &&
-                  Number.isFinite(workingDistance) &&
-                  Number.isInteger(workingDistance) &&
-                  workingDistance >= 1);
-
-              const canConfirm = isEditing && directionOk && powerOk && distanceOk;
+              const canConfirm =
+                isEditing &&
+                hasConfiguredManeuverPlan(workingPlan) &&
+                powerOk &&
+                !ambiguousDistanceAllocation &&
+                !distanceOverBudget;
 
               return (
                 <div className="mt-2 space-y-2">
                   {!isEditing && (
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[10px] text-slate-300">
-                        Maneuver: <span className="font-semibold">{committedDirection}</span> | Power{' '}
-                        <span className="font-semibold">{committedPowerSpent}</span> | Move{' '}
-                        <span className="font-semibold">{committedDistance === null ? 'full' : committedDistance}</span>
+                        Maneuver: <span className="font-semibold">{formatManeuverPlanSummary(committedPlan)}</span> | Power{' '}
+                        <span className="font-semibold">{committedPowerSpent ?? '—'}</span>
                         {committedRerouteSourceSection && (
                           <>
                             {' '}| Reroute <span className="font-semibold">{committedRerouteSourceSection}</span>
@@ -6707,9 +6762,8 @@ export function ShipDashboard() {
                           onClick={() => {
                             setExecutionConfirmed(false);
                             updatePlannedActionParameters(selectedCrew.id, {
-                              draftDirection: committedDirection,
-                              draftPowerSpent: committedPowerSpent,
-                              draftDistance: committedDistance,
+                              ...buildDraftManeuverParameters(committedPlan),
+                              draftPowerSpent: committedPowerSpent ?? undefined,
                               draftRerouteSourceSection: committedRerouteSourceSection,
                             }, ui.selectedActionSlot);
                           }}
@@ -6735,10 +6789,10 @@ export function ShipDashboard() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-[10px] text-slate-300">
                           Drives power: <span className="font-semibold">{drivesPower}</span> | Spend:{' '}
-                          <span className="font-semibold">{workingPowerSpent}</span>
-                          {previewSummary && (
+                          <span className="font-semibold">{workingPowerSpent ?? '—'}</span>
+                          {accelerationEstimate !== null && (
                             <>
-                              {' '}| Max accel: <span className="font-semibold">{previewSummary.acceleration}</span>
+                              {' '}| Max accel: <span className="font-semibold">{accelerationEstimate}</span>
                             </>
                           )}
                         </div>
@@ -6749,6 +6803,10 @@ export function ShipDashboard() {
                             onClick={() => {
                               setExecutionConfirmed(false);
                               updatePlannedActionParameters(selectedCrew.id, {
+                                draftTangentialDirection: undefined,
+                                draftTangentialDistance: undefined,
+                                draftRadialDirection: undefined,
+                                draftRadialDistance: undefined,
                                 draftDirection: undefined,
                                 draftPowerSpent: undefined,
                                 draftDistance: undefined,
@@ -6776,12 +6834,20 @@ export function ShipDashboard() {
                               if (!canConfirm) {
                                 return;
                               }
+                              if (workingPowerSpent === null) {
+                                return;
+                              }
                               setExecutionConfirmed(false);
                               updatePlannedActionParameters(selectedCrew.id, {
-                                direction: workingDirection,
-                                powerSpent: workingPowerSpent,
-                                distance: workingDistance,
-                                rerouteSourceSection: workingRerouteSourceSection,
+                                ...buildCommittedManeuverParameters(
+                                  workingPlan,
+                                  workingPowerSpent,
+                                  workingRerouteSourceSection,
+                                ),
+                                draftTangentialDirection: undefined,
+                                draftTangentialDistance: undefined,
+                                draftRadialDirection: undefined,
+                                draftRadialDistance: undefined,
                                 draftDirection: undefined,
                                 draftPowerSpent: undefined,
                                 draftDistance: undefined,
@@ -6791,39 +6857,6 @@ export function ShipDashboard() {
                           >
                             Confirm
                           </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[10px] text-gravity-muted">Direction</div>
-                        <div className="flex items-center gap-1">
-                          {([
-                            { key: 'forward', label: 'Forward' },
-                            { key: 'backward', label: 'Backward' },
-                            { key: 'inward', label: 'Inward' },
-                            { key: 'outward', label: 'Outward' },
-                          ] as const).map((opt) => {
-                            const active = workingDirection === opt.key;
-                            return (
-                              <button
-                                key={opt.key}
-                                type="button"
-                                className={`px-2 py-1 rounded text-[10px] ${
-                                  active
-                                    ? 'bg-amber-700/60 text-amber-100 border border-amber-400/60'
-                                    : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
-                                }`}
-                                onClick={() => {
-                                  setExecutionConfirmed(false);
-                                  updatePlannedActionParameters(selectedCrew.id, {
-                                    draftDirection: opt.key,
-                                  }, ui.selectedActionSlot);
-                                }}
-                              >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
                         </div>
                       </div>
 
@@ -6855,61 +6888,218 @@ export function ShipDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[10px] text-gravity-muted">Distance</div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className={`px-2 py-1 rounded text-[10px] ${
-                              workingDistance === null
-                                ? 'bg-amber-700/60 text-amber-100 border border-amber-400/60'
-                                : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
-                            }`}
-                            onClick={() => {
-                              setExecutionConfirmed(false);
-                              updatePlannedActionParameters(selectedCrew.id, {
-                                draftDistance: null,
-                              }, ui.selectedActionSlot);
-                            }}
-                          >
-                            Full
-                          </button>
+                      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                        <div className="rounded border border-cyan-500/20 bg-cyan-950/10 px-3 py-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Tangential lane</div>
+                              <div className="text-[10px] text-slate-400">Adjust orbital motion forward or backward.</div>
+                            </div>
+                            <div className="text-[10px] text-cyan-100">
+                              {workingPlan.tangentialDirection
+                                ? `${workingPlan.tangentialDirection} ${workingPlan.tangentialDistance ?? 'full'}`
+                                : 'Offline'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {([
+                              { key: null, label: 'Off' },
+                              { key: 'forward', label: 'Forward' },
+                              { key: 'backward', label: 'Backward' },
+                            ] as const).map((opt) => {
+                              const active = (workingPlan.tangentialDirection ?? null) === opt.key;
+                              return (
+                                <button
+                                  key={opt.label}
+                                  type="button"
+                                  className={`px-2 py-1 rounded text-[10px] ${
+                                    active
+                                      ? 'bg-cyan-700/60 text-cyan-100 border border-cyan-300/60'
+                                      : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                                  }`}
+                                  onClick={() => {
+                                    updateDraftPlan({
+                                      ...workingPlan,
+                                      tangentialDirection: opt.key,
+                                      tangentialDistance: opt.key ? workingPlan.tangentialDistance ?? null : null,
+                                    });
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!workingPlan.tangentialDirection}
+                              className={`px-2 py-1 rounded text-[10px] disabled:opacity-40 ${
+                                workingPlan.tangentialDistance === null
+                                  ? 'bg-cyan-700/60 text-cyan-100 border border-cyan-300/60'
+                                  : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                              }`}
+                              onClick={() => {
+                                if (!workingPlan.tangentialDirection) {
+                                  return;
+                                }
+                                updateDraftPlan({
+                                  ...workingPlan,
+                                  tangentialDistance: null,
+                                });
+                              }}
+                            >
+                              Full Remaining
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              max={accelerationEstimate ?? undefined}
+                              disabled={!workingPlan.tangentialDirection}
+                              value={workingPlan.tangentialDirection ? (workingPlan.tangentialDistance === null ? '' : String(workingPlan.tangentialDistance ?? '')) : ''}
+                              placeholder={accelerationEstimate ? String(accelerationEstimate) : '—'}
+                              onChange={(e) => {
+                                if (!workingPlan.tangentialDirection) {
+                                  return;
+                                }
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                  updateDraftPlan({
+                                    ...workingPlan,
+                                    tangentialDistance: null,
+                                  });
+                                  return;
+                                }
+                                const parsed = Number(raw);
+                                if (!Number.isFinite(parsed)) {
+                                  return;
+                                }
+                                const max = accelerationEstimate ?? Infinity;
+                                const clamped = Math.max(1, Math.min(max, Math.floor(parsed)));
+                                updateDraftPlan({
+                                  ...workingPlan,
+                                  tangentialDistance: clamped,
+                                });
+                              }}
+                              className="w-20 px-2 py-1 text-[10px] bg-gravity-bg border border-gravity-border rounded text-right disabled:opacity-40"
+                            />
+                          </div>
+                        </div>
 
-                          <input
-                            type="number"
-                            min={1}
-                            max={previewSummary?.acceleration ?? undefined}
-                            value={workingDistance === null ? '' : String(workingDistance)}
-                            placeholder={previewSummary ? String(previewSummary.acceleration) : '—'}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              if (raw === '') {
-                                setExecutionConfirmed(false);
-                                updatePlannedActionParameters(selectedCrew.id, {
-                                  draftDistance: null,
-                                }, ui.selectedActionSlot);
-                                return;
-                              }
+                        <div className="rounded border border-violet-500/20 bg-violet-950/10 px-3 py-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-200">Radial lane</div>
+                              <div className="text-[10px] text-slate-400">Move inward or outward through the rings.</div>
+                            </div>
+                            <div className="text-[10px] text-violet-100">
+                              {workingPlan.radialDirection
+                                ? `${workingPlan.radialDirection} ${workingPlan.radialDistance ?? 'full'}`
+                                : 'Offline'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {([
+                              { key: null, label: 'Off' },
+                              { key: 'inward', label: 'Inward' },
+                              { key: 'outward', label: 'Outward' },
+                            ] as const).map((opt) => {
+                              const active = (workingPlan.radialDirection ?? null) === opt.key;
+                              return (
+                                <button
+                                  key={opt.label}
+                                  type="button"
+                                  className={`px-2 py-1 rounded text-[10px] ${
+                                    active
+                                      ? 'bg-violet-700/60 text-violet-100 border border-violet-300/60'
+                                      : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                                  }`}
+                                  onClick={() => {
+                                    updateDraftPlan({
+                                      ...workingPlan,
+                                      radialDirection: opt.key,
+                                      radialDistance: opt.key ? workingPlan.radialDistance ?? null : null,
+                                    });
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!workingPlan.radialDirection}
+                              className={`px-2 py-1 rounded text-[10px] disabled:opacity-40 ${
+                                workingPlan.radialDistance === null
+                                  ? 'bg-violet-700/60 text-violet-100 border border-violet-300/60'
+                                  : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                              }`}
+                              onClick={() => {
+                                if (!workingPlan.radialDirection) {
+                                  return;
+                                }
+                                updateDraftPlan({
+                                  ...workingPlan,
+                                  radialDistance: null,
+                                });
+                              }}
+                            >
+                              Full Remaining
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              max={accelerationEstimate ?? undefined}
+                              disabled={!workingPlan.radialDirection}
+                              value={workingPlan.radialDirection ? (workingPlan.radialDistance === null ? '' : String(workingPlan.radialDistance ?? '')) : ''}
+                              placeholder={accelerationEstimate ? String(accelerationEstimate) : '—'}
+                              onChange={(e) => {
+                                if (!workingPlan.radialDirection) {
+                                  return;
+                                }
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                  updateDraftPlan({
+                                    ...workingPlan,
+                                    radialDistance: null,
+                                  });
+                                  return;
+                                }
+                                const parsed = Number(raw);
+                                if (!Number.isFinite(parsed)) {
+                                  return;
+                                }
+                                const max = accelerationEstimate ?? Infinity;
+                                const clamped = Math.max(1, Math.min(max, Math.floor(parsed)));
+                                updateDraftPlan({
+                                  ...workingPlan,
+                                  radialDistance: clamped,
+                                });
+                              }}
+                              className="w-20 px-2 py-1 text-[10px] bg-gravity-bg border border-gravity-border rounded text-right disabled:opacity-40"
+                            />
+                          </div>
+                        </div>
+                      </div>
 
-                              const parsed = Number(raw);
-                              if (!Number.isFinite(parsed)) {
-                                return;
-                              }
-
-                              const max = previewSummary?.acceleration ?? Infinity;
-                              const clamped = Math.max(1, Math.min(max, Math.floor(parsed)));
-                              setExecutionConfirmed(false);
-                              updatePlannedActionParameters(selectedCrew.id, {
-                                draftDistance: clamped,
-                              }, ui.selectedActionSlot);
-                            }}
-                            className="w-16 px-1 py-0.5 text-[10px] bg-gravity-bg border border-gravity-border rounded text-right disabled:opacity-50"
-                          />
-
-                          {previewSummary && (
-                            <span className="text-[10px] text-gravity-muted">/ {previewSummary.acceleration} max</span>
+                      <div className="rounded border border-slate-700/70 bg-slate-900/50 px-3 py-2 space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-[10px]">
+                          <span className="text-gravity-muted">Plotted course</span>
+                          <span className="font-semibold text-slate-100">{formatManeuverPlanSummary(workingPlan)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-300">
+                          <span>Explicit distance budget: <span className="font-semibold">{specifiedDistanceTotal}</span></span>
+                          {accelerationEstimate !== null && (
+                            <span>Unassigned acceleration: <span className="font-semibold">{remainingAcceleration}</span></span>
                           )}
                         </div>
+                        {selectedAxisCount === 2 && !ambiguousDistanceAllocation && (
+                          <div className="text-[10px] text-slate-400">
+                            Leave one lane on Full Remaining to spend the leftover acceleration on that lane automatically.
+                          </div>
+                        )}
                       </div>
 
                       {canPilotFamilyReroute && (
@@ -6976,7 +7166,7 @@ export function ShipDashboard() {
                       Preview: Ring <span className="font-semibold">{previewSummary.ring}</span>, Space{' '}
                       <span className="font-semibold">{previewSummary.space}</span> | Accel{' '}
                       <span className="font-semibold">{previewSummary.acceleration}</span> | Move{' '}
-                      <span className="font-semibold">{previewSummary.distanceMoved}</span>
+                      <span className="font-semibold">{previewSummary.distanceMoved}</span> | {formatManeuverPlanSummary(workingPlan)}
                     </div>
                   )}
 

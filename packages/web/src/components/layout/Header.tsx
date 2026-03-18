@@ -13,7 +13,17 @@ import { ActionBar } from '../actions/ActionBar';
  * - Settings button
  */
 export function Header() {
-  const { game, toggleRoster, toggleSettings, toggleHelp, newGame, difficulty, setDifficulty } = useGameStore();
+  const {
+    game,
+    toggleRoster,
+    toggleSettings,
+    toggleHelp,
+    newGame,
+    difficulty,
+    setDifficulty,
+    botPlayerEnabled,
+    setBotPlayerEnabled,
+  } = useGameStore();
 
   if (!game) {
     return null;
@@ -103,6 +113,17 @@ export function Header() {
               <option value="hard">Hard</option>
             </select>
           </label>
+          <button
+            onClick={() => setBotPlayerEnabled(!botPlayerEnabled)}
+            className={`px-3 py-1.5 rounded-md border text-xs transition-all duration-200 ${
+              botPlayerEnabled
+                ? 'border-emerald-400/50 text-emerald-100 bg-emerald-500/10 hover:border-emerald-300/60'
+                : 'border-gravity-border/50 text-gravity-muted hover:text-slate-100 hover:border-blue-500/40 hover:bg-blue-500/10'
+            }`}
+            title={botPlayerEnabled ? 'Bot is playing for you' : 'Hand control to bot for this player'}
+          >
+            {botPlayerEnabled ? 'Bot: ON' : 'Bot: OFF'}
+          </button>
           <button
             onClick={newGame}
             className="px-3 py-1.5 rounded-md border border-gravity-border/50 text-xs text-gravity-muted hover:text-slate-100 hover:border-blue-500/40 hover:bg-blue-500/10 transition-all duration-200"

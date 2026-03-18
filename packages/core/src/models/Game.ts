@@ -195,6 +195,27 @@ export type PlayerActionType =
   | 'assemble'
   | 'integrate';
 
+export type TangentialManeuverDirection = 'forward' | 'backward';
+
+export type RadialManeuverDirection = 'inward' | 'outward';
+
+export type ManeuverDirection = TangentialManeuverDirection | RadialManeuverDirection;
+
+export interface ManeuverMotionPlan {
+  tangentialDirection?: TangentialManeuverDirection | null;
+  tangentialDistance?: number | null;
+  radialDirection?: RadialManeuverDirection | null;
+  radialDistance?: number | null;
+  direction?: ManeuverDirection;
+  distance?: number | null;
+}
+
+export interface ManeuverActionParameters extends ManeuverMotionPlan {
+  powerSpent: number;
+  rerouteSourceSection?: ShipSection | null;
+  uiSlot?: 'primary' | 'bonus';
+}
+
 export interface PlayerActionTarget {
   playerId?: string;
   objectId?: string;

@@ -28,6 +28,11 @@ import {
   PlayerAction,
   PlayerActionType,
   PlayerActionResolutionRecord,
+  ManeuverActionParameters,
+  ManeuverMotionPlan,
+  ManeuverDirection,
+  TangentialManeuverDirection,
+  RadialManeuverDirection,
   AnySpaceObject,
   ScanDiscoveryRecord,
 } from '../models';
@@ -5413,9 +5418,9 @@ function prepareShipForManeuverPower(
     return {
       outcome: 'lost',
       message:
-        'Maneuver action was lost because Drives remained underpowered at resolution and no reroute source was selected. ' +
-        `Root cause: crew "${crewId}" requested ${powerSpent} power but Drives had only ${drivesPower}; this crew could have rerouted 1 power but action.parameters.rerouteSourceSection was empty. ` +
-        'Fix: Choose a powered source section to reroute 1 power into Drives, or route/restore power to Drives before maneuvering.',
+        'Maneuver lost: Drives were short 1 power and no reroute source was chosen. ' +
+        `Crew "${crewId}" asked for ${powerSpent} power but Drives had ${drivesPower}. ` +
+        'Pick a powered section to send 1 power into Drives, or add power to Drives before maneuvering.',
     };
   }
 
@@ -5513,6 +5518,254 @@ function prepareShipForManeuverPower(
   };
 }
 
+type NormalizedManeuverPlan = {
+  tangentialDirection: TangentialManeuverDirection | null;
+  tangentialDistance: number | null;
+  radialDirection: RadialManeuverDirection | null;
+  radialDistance: number | null;
+};
+
+type ResolvedManeuverDistances = {
+  tangentialDistance: number;
+  radialDistance: number;
+  totalDistance: number;
+};
+
+function isTangentialManeuverDirection(value: unknown): value is TangentialManeuverDirection {
+  return value === 'forward' || value === 'backward';
+}
+
+function isRadialManeuverDirection(value: unknown): value is RadialManeuverDirection {
+  return value === 'inward' || value === 'outward';
+}
+
+function isManeuverDirection(value: unknown): value is ManeuverDirection {
+  return isTangentialManeuverDirection(value) || isRadialManeuverDirection(value);
+}
+
+function parseOptionalManeuverDistance(rawDistance: unknown, fieldName: string, errorPrefix: string): number | null {
+  if (rawDistance === null || rawDistance === undefined || rawDistance === '') {
+    return null;
+  }
+
+  if (typeof rawDistance !== 'number' || !Number.isFinite(rawDistance)) {
+    throw new Error(
+      `${errorPrefix} because ${fieldName} is invalid. ` +
+        `Root cause: ${fieldName} is "${String(rawDistance)}". ` +
+        'Fix: Set maneuver distances to positive integer numbers, or clear them to use the remaining acceleration.'
+    );
+  }
+
+  if (!Number.isInteger(rawDistance) || rawDistance < 1) {
+    throw new Error(
+      `${errorPrefix} because ${fieldName} is invalid. ` +
+        `Root cause: ${fieldName} is ${rawDistance}. ` +
+        'Fix: Set maneuver distances to positive integer numbers, or clear them to use the remaining acceleration.'
+    );
+  }
+
+  return rawDistance;
+}
+
+function normalizeManeuverPlan(
+  parameters: ManeuverMotionPlan | ManeuverActionParameters | Record<string, unknown> | undefined,
+  errorPrefix: string,
+): NormalizedManeuverPlan {
+  const tangentialDirectionRaw = parameters?.tangentialDirection;
+  const radialDirectionRaw = parameters?.radialDirection;
+  const legacyDirectionRaw = parameters?.direction;
+
+  if (
+    tangentialDirectionRaw !== undefined &&
+    tangentialDirectionRaw !== null &&
+    tangentialDirectionRaw !== '' &&
+    !isTangentialManeuverDirection(tangentialDirectionRaw)
+  ) {
+    throw new Error(
+      `${errorPrefix} because action.parameters.tangentialDirection is unknown. ` +
+        `Root cause: tangentialDirection is "${String(tangentialDirectionRaw)}". ` +
+        'Fix: Set tangentialDirection to forward or backward, or clear it.'
+    );
+  }
+
+  if (
+    radialDirectionRaw !== undefined &&
+    radialDirectionRaw !== null &&
+    radialDirectionRaw !== '' &&
+    !isRadialManeuverDirection(radialDirectionRaw)
+  ) {
+    throw new Error(
+      `${errorPrefix} because action.parameters.radialDirection is unknown. ` +
+        `Root cause: radialDirection is "${String(radialDirectionRaw)}". ` +
+        'Fix: Set radialDirection to inward or outward, or clear it.'
+    );
+  }
+
+  if (
+    legacyDirectionRaw !== undefined &&
+    legacyDirectionRaw !== null &&
+    legacyDirectionRaw !== '' &&
+    !isManeuverDirection(legacyDirectionRaw)
+  ) {
+    throw new Error(
+      `${errorPrefix} because action.parameters.direction is unknown. ` +
+        `Root cause: direction is "${String(legacyDirectionRaw)}". ` +
+        'Fix: Set direction to forward, backward, inward, or outward.'
+    );
+  }
+
+  let tangentialDirection = isTangentialManeuverDirection(tangentialDirectionRaw) ? tangentialDirectionRaw : null;
+  let radialDirection = isRadialManeuverDirection(radialDirectionRaw) ? radialDirectionRaw : null;
+
+  if (!tangentialDirection && !radialDirection && isManeuverDirection(legacyDirectionRaw)) {
+    if (isTangentialManeuverDirection(legacyDirectionRaw)) {
+      tangentialDirection = legacyDirectionRaw;
+    } else {
+      radialDirection = legacyDirectionRaw;
+    }
+  }
+
+  let tangentialDistance = parseOptionalManeuverDistance(
+    parameters?.tangentialDistance,
+    'action.parameters.tangentialDistance',
+    errorPrefix,
+  );
+  let radialDistance = parseOptionalManeuverDistance(
+    parameters?.radialDistance,
+    'action.parameters.radialDistance',
+    errorPrefix,
+  );
+  const legacyDistance = parseOptionalManeuverDistance(
+    parameters?.distance,
+    'action.parameters.distance',
+    errorPrefix,
+  );
+
+  if (legacyDistance !== null && tangentialDistance === null && radialDistance === null) {
+    if (tangentialDirection && !radialDirection) {
+      tangentialDistance = legacyDistance;
+    } else if (radialDirection && !tangentialDirection) {
+      radialDistance = legacyDistance;
+    }
+  }
+
+  if (tangentialDistance !== null && !tangentialDirection) {
+    throw new Error(
+      `${errorPrefix} because tangentialDistance was provided without a tangential direction. ` +
+        `Root cause: tangentialDistance=${tangentialDistance} while tangentialDirection is empty. ` +
+        'Fix: Choose forward or backward, or clear tangentialDistance.'
+    );
+  }
+
+  if (radialDistance !== null && !radialDirection) {
+    throw new Error(
+      `${errorPrefix} because radialDistance was provided without a radial direction. ` +
+        `Root cause: radialDistance=${radialDistance} while radialDirection is empty. ` +
+        'Fix: Choose inward or outward, or clear radialDistance.'
+    );
+  }
+
+  if (!tangentialDirection && !radialDirection) {
+    throw new Error(
+      `${errorPrefix} because no maneuver movement axis was selected. ` +
+        'Root cause: tangentialDirection and radialDirection are both empty. ' +
+        'Fix: Choose forward/backward, inward/outward, or one of each before confirming the maneuver.'
+    );
+  }
+
+  return {
+    tangentialDirection,
+    tangentialDistance,
+    radialDirection,
+    radialDistance,
+  };
+}
+
+function resolveManeuverDistances(
+  plan: NormalizedManeuverPlan,
+  acceleration: number,
+  errorPrefix: string,
+): ResolvedManeuverDistances {
+  let tangentialDistance = plan.tangentialDirection ? plan.tangentialDistance : 0;
+  let radialDistance = plan.radialDirection ? plan.radialDistance : 0;
+
+  const unspecifiedAxes = [
+    plan.tangentialDirection && tangentialDistance === null ? 'tangential' : null,
+    plan.radialDirection && radialDistance === null ? 'radial' : null,
+  ].filter((value): value is 'tangential' | 'radial' => value !== null);
+
+  const specifiedDistance = (tangentialDistance ?? 0) + (radialDistance ?? 0);
+  if (specifiedDistance > acceleration) {
+    throw new Error(
+      `${errorPrefix} because requested distance exceeds maximum acceleration. ` +
+        `Root cause: requested ${specifiedDistance} total movement but max acceleration is ${acceleration}. ` +
+        'Fix: Reduce tangential/radial distances or increase maneuver power and bonuses.'
+    );
+  }
+
+  const remainingAcceleration = acceleration - specifiedDistance;
+  if (unspecifiedAxes.length > 1) {
+    throw new Error(
+      `${errorPrefix} because both maneuver axes were selected without distances. ` +
+        `Root cause: tangentialDirection="${String(plan.tangentialDirection)}" and radialDirection="${String(plan.radialDirection)}" but neither distance was specified. ` +
+        'Fix: Set at least one distance so the remaining acceleration can be assigned clearly.'
+    );
+  }
+
+  if (unspecifiedAxes.length === 1) {
+    if (remainingAcceleration < 1) {
+      throw new Error(
+        `${errorPrefix} because the remaining acceleration is too small for the second maneuver axis. ` +
+          `Root cause: only ${remainingAcceleration} acceleration remained after explicit distances were assigned. ` +
+          'Fix: Reduce the first axis distance, or clear it so the remaining acceleration can be distributed.'
+      );
+    }
+
+    if (unspecifiedAxes[0] === 'tangential') {
+      tangentialDistance = remainingAcceleration;
+    } else {
+      radialDistance = remainingAcceleration;
+    }
+  }
+
+  const resolvedTangentialDistance = tangentialDistance ?? 0;
+  const resolvedRadialDistance = radialDistance ?? 0;
+  const totalDistance = resolvedTangentialDistance + resolvedRadialDistance;
+
+  if (totalDistance < 1) {
+    throw new Error(
+      `${errorPrefix} because maneuver distance is zero. ` +
+        'Root cause: no positive tangential or radial distance was assigned after validation. ' +
+        'Fix: Choose at least one movement axis and assign at least 1 distance.'
+    );
+  }
+
+  return {
+    tangentialDistance: resolvedTangentialDistance,
+    radialDistance: resolvedRadialDistance,
+    totalDistance,
+  };
+}
+
+function applyManeuverMotionPlan(
+  ship: Ship,
+  plan: NormalizedManeuverPlan,
+  resolvedDistances: ResolvedManeuverDistances,
+  board: Board,
+): Ship {
+  let updatedShip = ship;
+
+  if (plan.tangentialDirection && resolvedDistances.tangentialDistance > 0) {
+    updatedShip = moveShip(updatedShip, plan.tangentialDirection, resolvedDistances.tangentialDistance, board);
+  }
+
+  if (plan.radialDirection && resolvedDistances.radialDistance > 0) {
+    updatedShip = moveShip(updatedShip, plan.radialDirection, resolvedDistances.radialDistance, board);
+  }
+
+  return updatedShip;
+}
+
 /**
  * Resolve maneuver actions
  * Purpose: Process ship movement
@@ -5529,7 +5782,7 @@ function prepareShipForManeuverPower(
  * - Pilot: +1 acceleration
  * - Ace Pilot: +2 acceleration
  * - Bridge fully powered: +1 acceleration
- * - Direction specified in action.parameters.direction: 'forward' | 'backward' | 'inward' | 'outward'
+ * - Movement may include one tangential axis and one radial axis in a single action
  * - Power to spend in action.parameters.powerSpent
  */
 function resolveManeuverActions(game: GameState, actions: ActionBatch): GameState {
@@ -5606,33 +5859,11 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
     const stimResult = consumeStimPackIfRequested(workingPlayer, action, crew, actingSection);
     workingPlayer = stimResult.player;
 
-    // Get direction and power from parameters
-    const rawDirection = action.parameters?.direction;
-    const direction = typeof rawDirection === 'string' ? rawDirection : null;
+    const parameters = action.parameters as ManeuverActionParameters | undefined;
     const rawPowerSpent = action.parameters?.powerSpent;
     const powerSpent = typeof rawPowerSpent === 'number' ? rawPowerSpent : null;
-    const parameters = action.parameters as Record<string, unknown> | undefined;
-    const hasRequestedDistance =
-      !!parameters && Object.prototype.hasOwnProperty.call(parameters, 'distance');
-    const requestedDistanceRaw = (parameters as any)?.distance as unknown;
-    const requestedDistance =
-      typeof requestedDistanceRaw === 'number' && Number.isFinite(requestedDistanceRaw)
-        ? requestedDistanceRaw
-        : null;
-    const rerouteSourceSectionRaw = (parameters as any)?.rerouteSourceSection as unknown;
-
-    if (
-      direction !== 'forward' &&
-      direction !== 'backward' &&
-      direction !== 'inward' &&
-      direction !== 'outward'
-    ) {
-      throw new Error(
-        'Cannot resolve maneuver action because direction is unknown. ' +
-          `Root cause: action.parameters.direction is "${String(rawDirection)}". ` +
-          'Fix: Set action.parameters.direction to one of: forward, backward, inward, outward.'
-      );
-    }
+    const rerouteSourceSectionRaw = parameters?.rerouteSourceSection;
+    const maneuverPlan = normalizeManeuverPlan(parameters, 'Cannot resolve maneuver action');
 
     if (powerSpent === null || !Number.isFinite(powerSpent) || powerSpent < 1) {
       throw new Error(
@@ -5640,24 +5871,6 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
           `Root cause: action.parameters.powerSpent is "${String(rawPowerSpent)}". ` +
           'Fix: Set action.parameters.powerSpent to a positive number.'
       );
-    }
-
-    if (hasRequestedDistance) {
-      if (requestedDistanceRaw === null || requestedDistanceRaw === undefined) {
-        // Null/undefined means: move full distance (max acceleration)
-      } else if (requestedDistance === null) {
-        throw new Error(
-          'Cannot resolve maneuver action because distance is invalid. ' +
-            `Root cause: action.parameters.distance is "${String(requestedDistanceRaw)}". ` +
-            'Fix: Set action.parameters.distance to a positive integer number of spaces (or omit it to move the full distance).'
-        );
-      } else if (!Number.isInteger(requestedDistance) || requestedDistance < 1) {
-        throw new Error(
-          'Cannot resolve maneuver action because distance is invalid. ' +
-            `Root cause: action.parameters.distance is "${String(requestedDistanceRaw)}". ` +
-            'Fix: Set action.parameters.distance to a positive integer number of spaces (or omit it to move the full distance).'
-        );
-      }
     }
 
     const maneuverPreparation = prepareShipForManeuverPower(
@@ -5706,17 +5919,13 @@ function resolveManeuverActions(game: GameState, actions: ActionBatch): GameStat
       acceleration += 1;
     }
 
-    const distanceToMove = requestedDistance === null ? acceleration : requestedDistance;
-    if (distanceToMove > acceleration) {
-      throw new Error(
-        'Cannot resolve maneuver action because requested distance exceeds maximum acceleration. ' +
-          `Root cause: requested distance ${distanceToMove} but max acceleration is ${acceleration}. ` +
-          'Fix: Reduce action.parameters.distance (or omit it to move the full distance).'
-      );
-    }
+    const resolvedDistances = resolveManeuverDistances(
+      maneuverPlan,
+      acceleration,
+      'Cannot resolve maneuver action',
+    );
 
-    // Apply movement based on direction
-    let updatedShip = moveShip(workingShip, direction, distanceToMove, game.board);
+    let updatedShip = applyManeuverMotionPlan(workingShip, maneuverPlan, resolvedDistances, game.board);
     if (playerHasPoweredUpgrade(workingPlayer, workingShip, 'plasma_engine')) {
       updatedShip = addPowerToSection(updatedShip, SHIP_SECTIONS.DRIVES, 1);
     }
@@ -5905,11 +6114,11 @@ function moveShip(
 export function previewManeuver(
   ship: Ship,
   crew: AnyCrew | Captain,
-  direction: string,
+  planOrDirection: ManeuverMotionPlan | ManeuverDirection,
   powerSpent: number,
   board: Board,
-  distance?: number,
-  installedUpgrades?: UpgradeCard[],
+  distanceOrInstalledUpgrades?: number | UpgradeCard[],
+  installedUpgradesOrRerouteSourceSection?: UpgradeCard[] | ShipSection | null,
   rerouteSourceSection?: ShipSection | null,
 ): { shipAfterCost: Ship; updatedShip: Ship; acceleration: number; distanceMoved: number } {
   const actingSection = requireCrewLocationForAction(crew, 'maneuver', crew.id);
@@ -5923,19 +6132,6 @@ export function previewManeuver(
     );
   }
 
-  if (
-    direction !== 'forward' &&
-    direction !== 'backward' &&
-    direction !== 'inward' &&
-    direction !== 'outward'
-  ) {
-    throw new Error(
-      'Cannot preview maneuver because direction is unknown. ' +
-        `Root cause: direction is "${String(direction)}". ` +
-        'Fix: Set direction to one of: forward, backward, inward, outward.'
-    );
-  }
-
   if (typeof powerSpent !== 'number' || !Number.isFinite(powerSpent) || powerSpent < 1) {
     throw new Error(
       'Cannot preview maneuver because powerSpent is invalid. ' +
@@ -5944,21 +6140,46 @@ export function previewManeuver(
     );
   }
 
-  if (distance !== undefined) {
-    if (typeof distance !== 'number' || !Number.isFinite(distance) || !Number.isInteger(distance) || distance < 1) {
-      throw new Error(
-        'Cannot preview maneuver because distance is invalid. ' +
-          `Root cause: distance is "${String(distance)}". ` +
-          'Fix: Provide distance as a positive integer number of spaces (or omit it to preview the full distance).'
-      );
-    }
+  const legacyPreviewCall = typeof planOrDirection === 'string';
+  if (!legacyPreviewCall && typeof distanceOrInstalledUpgrades === 'number') {
+    throw new Error(
+      'Cannot preview maneuver because a split-axis maneuver plan cannot use the legacy distance argument. ' +
+        `Root cause: received numeric argument ${distanceOrInstalledUpgrades} after a maneuver plan object. ` +
+        'Fix: Put tangentialDistance and radialDistance inside the maneuver plan object.'
+    );
   }
+
+  const maneuverPlan = normalizeManeuverPlan(
+    legacyPreviewCall
+      ? {
+          direction: planOrDirection,
+          distance: typeof distanceOrInstalledUpgrades === 'number' ? distanceOrInstalledUpgrades : undefined,
+        }
+      : planOrDirection,
+    'Cannot preview maneuver',
+  );
+  const resolvedInstalledUpgrades = legacyPreviewCall
+    ? Array.isArray(installedUpgradesOrRerouteSourceSection)
+      ? installedUpgradesOrRerouteSourceSection
+      : undefined
+    : Array.isArray(distanceOrInstalledUpgrades)
+      ? distanceOrInstalledUpgrades
+      : Array.isArray(installedUpgradesOrRerouteSourceSection)
+        ? installedUpgradesOrRerouteSourceSection
+        : undefined;
+  const resolvedRerouteSourceSection = legacyPreviewCall
+    ? Array.isArray(installedUpgradesOrRerouteSourceSection)
+      ? rerouteSourceSection
+      : installedUpgradesOrRerouteSourceSection
+    : Array.isArray(installedUpgradesOrRerouteSourceSection)
+      ? rerouteSourceSection
+      : installedUpgradesOrRerouteSourceSection;
 
   const maneuverPreparation = prepareShipForManeuverPower(
     ship,
     crew,
     powerSpent,
-    rerouteSourceSection,
+    resolvedRerouteSourceSection,
     crew.id,
   );
   if (maneuverPreparation.outcome === 'lost') {
@@ -5976,24 +6197,21 @@ export function previewManeuver(
   }
   acceleration += getManeuverBonus(crew);
 
-  if (upgradeListHas(installedUpgrades, 'inertia_control')) {
+  if (upgradeListHas(resolvedInstalledUpgrades, 'inertia_control')) {
     acceleration += 1;
   }
-  if (upgradeListHas(installedUpgrades, 'ion_engine')) {
+  if (upgradeListHas(resolvedInstalledUpgrades, 'ion_engine')) {
     acceleration += 1;
   }
 
-  const distanceToMove = distance === undefined ? acceleration : distance;
-  if (distanceToMove > acceleration) {
-    throw new Error(
-      'Cannot preview maneuver because requested distance exceeds maximum acceleration. ' +
-        `Root cause: requested distance ${distanceToMove} but max acceleration is ${acceleration}. ` +
-        'Fix: Reduce distance or increase powerSpent/bonuses so max acceleration is high enough.'
-    );
-  }
+  const resolvedDistances = resolveManeuverDistances(
+    maneuverPlan,
+    acceleration,
+    'Cannot preview maneuver',
+  );
 
-  const updatedShip = moveShip(shipAfterCost, direction, distanceToMove, board);
-  return { shipAfterCost, updatedShip, acceleration, distanceMoved: distanceToMove };
+  const updatedShip = applyManeuverMotionPlan(shipAfterCost, maneuverPlan, resolvedDistances, board);
+  return { shipAfterCost, updatedShip, acceleration, distanceMoved: resolvedDistances.totalDistance };
 }
 
 /**

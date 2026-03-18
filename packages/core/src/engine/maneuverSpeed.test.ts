@@ -157,4 +157,26 @@ describe('maneuver speed/velocity updates', () => {
 
     expect(updatedShip.speed).toBe(4);
   });
+
+  it('keeps tangential speed updates when a split-axis maneuver also changes rings', () => {
+    const baseShip = createInitialShip({ ring: 4, space: 2 });
+    const ship: Ship = { ...baseShip, speed: 0 };
+    const game = createStarter(ship);
+
+    const { updatedShip } = previewManeuver(
+      game.players.get('player-1')!.ship,
+      game.players.get('player-1')!.crew[0],
+      {
+        tangentialDirection: 'forward',
+        tangentialDistance: 1,
+        radialDirection: 'inward',
+        radialDistance: 1,
+      },
+      1,
+      game.board,
+    );
+
+    expect(updatedShip.speed).toBe(1);
+    expect(updatedShip.position.ring).toBe(3);
+  });
 });
