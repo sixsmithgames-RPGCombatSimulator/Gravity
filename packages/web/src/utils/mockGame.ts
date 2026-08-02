@@ -148,17 +148,12 @@ function seedInitialObjects(game: GameState): GameState {
     }
     const occupied = occupiedByRing.get(outerRing.index)!;
 
-    const spacing = outerRing.numSpaces / startingPlayerCount;
     const sortedPlayers = Array.from(game.players.values()).sort(
       (a, b) => a.playerOrder - b.playerOrder,
     );
 
     for (let index = 0; index < sortedPlayers.length; index += 1) {
-      const space = index * spacing;
-      // startGame throws if this isn't an integer; keep the same behavior here.
-      if (!Number.isInteger(space)) {
-        continue;
-      }
+      const space = Math.floor((index * outerRing.numSpaces) / startingPlayerCount);
       occupied.add(space);
     }
   }
@@ -226,9 +221,6 @@ function seedInitialObjects(game: GameState): GameState {
 
   // Wrecked ships: (number of players) on ring 5
   addSpread('wrecked_ship', 5, objectPlayerCount);
-
-  // Functional stations: 1 at start
-  addSpread('functional_station', 6, 1);
 
   return {
     ...game,

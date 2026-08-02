@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gravity
+          POSTGRES_PASSWORD: gravity_test_password
+          POSTGRES_DB: gravity_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gravity -d gravity_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use repository npm version
+        run: npm install --global npm@10.8.2
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Apply database migrations
+        run: npm run db:migrate --workspace=@gravity/server
+        env:
+          DATABASE_URL: postgresql://gravity:gravity_test_password@localhost:5432/gravity_test
+
+      - name: Test PostgreSQL session persistence
+        run: npm run test:integration --workspace=@gravity/server
+        env:
+          DATABASE_URL: postgresql://gravity:gravity_test_password@localhost:5432/gravity_test
+          TEST_DATABASE_URL: postgresql://gravity:gravity_test_password@localhost:5432/gravity_test
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+
+      - name: Install Chromium for multiplayer journey
+        run: npx playwright install --with-deps chromium
+
+      - name: Test two-browser multiplayer journey
+        run: npm run test:e2e
+
+      - name: Start production-like staging data services
+        run: docker compose --project-name gravity-cert --file docker-compose.staging.yml up --detach --wait --wait-timeout 60 postgres redis
+        env:
+          STAGING_POSTGRES_PASSWORD: gravity_staging_password
+          STAGING_REDIS_PASSWORD: gravity_staging_redis_password
+          STAGING_CLERK_ISSUER: https://clerk.example.test
+          STAGING_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          STAGING_JOIN_CODE_PEPPER: gravity-staging-certification-pepper
+
+      - name: Apply staging rehearsal migrations
+        run: npm run db:migrate --workspace=@gravity/server
+        env:
+          DATABASE_URL: postgresql://gravity:gravity_staging_password@127.0.0.1:55432/gravity_staging
+
+      - name: Test durable multiplayer and reconnect storm
+        run: npm run test:e2e:staging
+        env:
+          STAGING_DATABASE_URL: postgresql://gravity:gravity_staging_password@127.0.0.1:55432/gravity_staging
+          STAGING_REDIS_URL: redis://:gravity_staging_redis_password@127.0.0.1:56379
+
+      - name: Rehearse PostgreSQL backup and restore
+        run: node ops/postgres/docker-backup.mjs rehearse --project gravity-cert --database gravity_staging --user gravity --output .artifacts/gravity-cert-rehearsal.dump --overwrite
+        env:
+          STAGING_POSTGRES_PASSWORD: gravity_staging_password
+          STAGING_REDIS_PASSWORD: gravity_staging_redis_password
+          STAGING_CLERK_ISSUER: https://clerk.example.test
+          STAGING_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          STAGING_JOIN_CODE_PEPPER: gravity-staging-certification-pepper
+
+      - name: Verify repository after restore
+        run: npm run test:integration --workspace=@gravity/server
+        env:
+          DATABASE_URL: postgresql://gravity:gravity_staging_password@127.0.0.1:55432/gravity_staging
+          TEST_DATABASE_URL: postgresql://gravity:gravity_staging_password@127.0.0.1:55432/gravity_staging
+
+      - name: Stop staging rehearsal services
+        if: always()
+        run: docker compose --project-name gravity-cert --file docker-compose.staging.yml down --volumes --remove-orphans
+        env:
+          STAGING_POSTGRES_PASSWORD: gravity_staging_password
+          STAGING_REDIS_PASSWORD: gravity_staging_redis_password
+          STAGING_CLERK_ISSUER: https://clerk.example.test
+          STAGING_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          STAGING_JOIN_CODE_PEPPER: gravity-staging-certification-pepper
+
+      - name: Core coverage gate
+        run: npm run test:coverage --workspace=@gravity/core
+
+      - name: Verify production container builds
+        run: docker compose build server web
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k

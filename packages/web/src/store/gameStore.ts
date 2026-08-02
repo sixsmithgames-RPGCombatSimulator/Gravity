@@ -3,9 +3,9 @@ import {
   ConsoleBotLogger,
   processTurn,
   generateAllBotActions as generateAllBotActionsFromEngine,
+  calculateLifeSupportBreakdown,
   CrewUtils,
   SHIP_SECTIONS,
-  LIFE_SUPPORT_CONFIG,
   assignExplorerRepairKit as assignExplorerRepairKitFromEngine,
   chooseSpacePirateStartingUpgrade as chooseSpacePirateStartingUpgradeFromEngine,
 } from '@gravity/core';
@@ -27,9 +27,9 @@ import type {
   Captain,
 } from '@gravity/core';
 import { createMockGame, type Difficulty } from '../utils/mockGame';
-import { getUpgradePowerStatus } from '../utils/upgradePower';
 
-const BOT_EXECUTION_ENABLED_DEFAULT = false;
+// Opponent bots participate by default so a new local game is immediately playable.
+const BOT_EXECUTION_ENABLED_DEFAULT = true;
 const BOT_LOG_LEVEL: BotLogLevel = import.meta.env.DEV ? 'verbose' : 'off';
 const BOT_CONSOLE_LOGGER = new ConsoleBotLogger();
 
@@ -60,83 +60,15 @@ function getDisabledBotActions(game: GameState): TurnActions {
 
 /**
  * Compute the total life support capacity for a player.
- * Purpose: Mirror the engine's life support accounting (pool + captain + powered upgrades) on the client
- * so that UI guardrails stay in sync with authoritative turn processing.
+ * Purpose: Delegate to the engine's canonical pool + bonus calculation so UI guardrails
+ * stay in sync with authoritative turn processing.
  * Parameters:
  *   - player: Player whose ship + upgrades determine life support.
  * Returns: Total life support points available this turn.
  * Side effects: None (pure function). Throws when ship state is invalid so calling code can surface actionable errors.
  */
 export function computeLifeSupportCapacity(player: PlayerState): number {
-  if (!player) {
-    throw new Error(
-      'Cannot compute life support capacity because player state is missing. ' +
-        'Root cause: computeLifeSupportCapacity received null/undefined player. ' +
-        'Fix: Ensure a valid PlayerState is provided before evaluating life support.',
-    );
-  }
-
-  const ship = player.ship;
-  if (!ship) {
-    throw new Error(
-      'Cannot compute life support capacity because player.ship is missing. ' +
-        `Root cause: player "${player.id}" has no ship on state. ` +
-        'Fix: Ensure PlayerState includes an initialized ship before planning actions.',
-    );
-  }
-
-  const baseLifeSupportPowerRaw = ship.lifeSupportPower;
-  const baseLifeSupportPower = (() => {
-    if (typeof baseLifeSupportPowerRaw === 'undefined') {
-      return 0;
-    }
-    if (typeof baseLifeSupportPowerRaw !== 'number' || !Number.isFinite(baseLifeSupportPowerRaw)) {
-      throw new Error(
-        'Cannot compute life support capacity because ship.lifeSupportPower is invalid. ' +
-          `Root cause: ship.lifeSupportPower is "${String(baseLifeSupportPowerRaw)}" for player "${player.id}". ` +
-          'Fix: Ensure ship.lifeSupportPower is always a finite number.',
-      );
-    }
-    if (baseLifeSupportPowerRaw < 0) {
-      throw new Error(
-        'Cannot compute life support capacity because ship.lifeSupportPower is negative. ' +
-          `Root cause: ship.lifeSupportPower is ${baseLifeSupportPowerRaw} for player "${player.id}". ` +
-          'Fix: Avoid setting life support below zero (routing/restore logic must clamp at 0).',
-      );
-    }
-    return baseLifeSupportPowerRaw;
-  })();
-
-  let totalLifeSupportPower = baseLifeSupportPower;
-
-  if (player.captain?.captainType === 'explorer') {
-    totalLifeSupportPower += 5;
-  }
-
-  const addUpgradeBonus = (upgradeId: string, bonus: number) => {
-    const upgrade = player.installedUpgrades?.find((entry) => entry.id === upgradeId);
-    if (!upgrade) {
-      return;
-    }
-    const status = getUpgradePowerStatus(upgrade, ship);
-    if (status.isPowered) {
-      totalLifeSupportPower += bonus;
-    }
-  };
-
-  addUpgradeBonus('bio_filters', 3);
-  addUpgradeBonus('bio_engine', 1);
-
-  const powerPerCrew = LIFE_SUPPORT_CONFIG.POWER_PER_CREW;
-  if (typeof powerPerCrew !== 'number' || !Number.isFinite(powerPerCrew) || powerPerCrew <= 0) {
-    throw new Error(
-      'Cannot compute life support capacity because LIFE_SUPPORT_CONFIG.POWER_PER_CREW is invalid. ' +
-        `Root cause: LIFE_SUPPORT_CONFIG.POWER_PER_CREW is "${String(powerPerCrew)}". ` +
-        'Fix: Configure a positive finite power-per-crew ratio.',
-    );
-  }
-
-  return Math.floor(totalLifeSupportPower / powerPerCrew);
+  return calculateLifeSupportBreakdown(player).capacity;
 }
 
 /**
@@ -432,9 +364,12 @@ export interface GravityStore {
   /** Current player id */
   currentPlayerId: string | null;
   /** Difficulty setting */
-  difficulty: 'easy' | 'normal' | 'hard';
-  /** Whether the local player has handed control to the bot */
+  difficulty: Difficulty;
+  /** Whether opponent bot players execute their planned turns */
   botPlayerEnabled: boolean;
+  /** Server submitter installed for authenticated network sessions. */
+  networkTurnSubmitter: ((actions: PlayerAction[]) => Promise<void>) | null;
+  isNetworkSubmitting: boolean;
 
   // === UI State ===
   ui: UIState;
@@ -448,6 +383,7 @@ export interface GravityStore {
   setDifficulty: (difficulty: GravityStore['difficulty']) => void;
   /** Enable/disable bot control for the local player */
   setBotPlayerEnabled: (enabled: boolean) => void;
+  setNetworkTurnSubmitter: (submitter: GravityStore['networkTurnSubmitter']) => void;
   /** Update game state after turn processing */
   updateGameState: (game: GameState) => void;
   /** Start a brand new game using engine-driven mock setup */
@@ -597,6 +533,8 @@ export const useGameStore = create<GravityStore>((set, get) => ({
   currentPlayerId: null,
   difficulty: 'hard',
   botPlayerEnabled: BOT_EXECUTION_ENABLED_DEFAULT,
+  networkTurnSubmitter: null,
+  isNetworkSubmitting: false,
   ui: initialUIState,
 
   // === Game Actions ===
@@ -609,6 +547,7 @@ export const useGameStore = create<GravityStore>((set, get) => ({
   })),
 
   setCurrentPlayer: (playerId) => set({ currentPlayerId: playerId }),
+  setNetworkTurnSubmitter: (submitter) => set({ networkTurnSubmitter: submitter }),
 
   setDifficulty: (difficulty) => set({ difficulty }),
 
@@ -790,7 +729,7 @@ export const useGameStore = create<GravityStore>((set, get) => ({
               ...state.ui,
               lastError:
                 `Cannot add Revive because life support capacity ${capacity} would be exceeded (${projectedLoad} crew).
-Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defense, or Bio upgrades) or clear another Revive action.`,
+Fix: route more power into the life support pool, use a life-support upgrade, or clear another Revive action.`,
             },
           }));
 
@@ -1075,7 +1014,7 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
 
   // === High-level game flow helpers ===
   playTurn: () => {
-    const { game, currentPlayerId, ui } = get();
+    const { game, currentPlayerId, ui, networkTurnSubmitter } = get();
 
     try {
       if (!game || !currentPlayerId) {
@@ -1092,6 +1031,21 @@ Fix: restore more life support (repair/power Med Lab, Engineering, Sci Lab, Defe
           `Root cause: game.status is "${game.status}". ` +
           'Fix: Only call playTurn when game.status is "in_progress".'
         );
+      }
+
+      if (networkTurnSubmitter) {
+        set({ isNetworkSubmitting: true, ui: { ...ui, lastError: null } });
+        void networkTurnSubmitter([...ui.plannedActions])
+          .catch((error: unknown) => {
+            set((state) => ({
+              ui: {
+                ...state.ui,
+                lastError: error instanceof Error ? error.message : 'The server rejected this turn.',
+              },
+            }));
+          })
+          .finally(() => set({ isNetworkSubmitting: false }));
+        return;
       }
 
       const humanActions: TurnActions = {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { SHIP_SECTIONS } from '@gravity/core';
-import type { PlayerActionType, AnyCrew, Captain, PlayerAction, ShipSection } from '@gravity/core';
+import { SHIP_SECTIONS, TURN_CONFIG } from '@gravity/core';
+import type { PlayerActionType, AnyCrew, Captain, PlayerAction, ShipSection, TurnPhase } from '@gravity/core';
 import { getUpgradePowerStatus } from '../../utils/upgradePower';
 import {
   buildCommittedManeuverParameters,
@@ -37,6 +37,39 @@ const ACTION_CONFIG: Record<PlayerActionType, { icon: string; label: string; col
   integrate: { icon: '⚡', label: 'Integrate',  color: 'text-slate-400',   svgPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
 };
 
+const PHASE_GUIDANCE: Record<TurnPhase, { step: number; label: string; description: string; buttonLabel: string }> = {
+  event: {
+    step: 1,
+    label: 'Event',
+    description: 'Add incoming objects, then resolve this turn\'s Event card.',
+    buttonLabel: 'Resolve Infall & Event',
+  },
+  action_planning: {
+    step: 2,
+    label: 'Plan',
+    description: 'Assign one action to every active crew member.',
+    buttonLabel: 'Lock Plans',
+  },
+  action_execution: {
+    step: 3,
+    label: 'Configure',
+    description: 'Choose targets, power, repairs, and movement in the dashboard.',
+    buttonLabel: 'Resolve Actions',
+  },
+  environment: {
+    step: 4,
+    label: 'Environment',
+    description: 'Apply radiation, gravity, collisions, and hostile movement.',
+    buttonLabel: 'Resolve Environment',
+  },
+  resolution: {
+    step: 5,
+    label: 'Resolution',
+    description: 'Review the outcome and prepare the next turn.',
+    buttonLabel: 'Start Next Turn',
+  },
+};
+
 /**
  * Inline SVG icon component for action types.
  * Renders the action's SVG path at a small size with the action's color.
@@ -54,6 +87,7 @@ function ActionIcon({ actionType, size = 14 }: { actionType: PlayerActionType; s
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`inline-block ${config.color} shrink-0`}
+      aria-hidden="true"
     >
       <path d={config.svgPath} />
     </svg>
@@ -62,6 +96,7 @@ function ActionIcon({ actionType, size = 14 }: { actionType: PlayerActionType; s
 
 const ACTION_TYPES: PlayerActionType[] = [
   'restore',
+  'route',
   'repair',
   'revive',
   'maneuver',
@@ -77,6 +112,7 @@ const ACTION_TYPES: PlayerActionType[] = [
 // All action types with parameter UIs implemented
 const UI_ACTION_TYPES: PlayerActionType[] = ACTION_TYPES.filter((type) =>
   type === 'restore' ||
+  type === 'route' ||
   type === 'repair' ||
   type === 'revive' ||
   type === 'maneuver' ||
@@ -109,6 +145,7 @@ function CrewActionSlot({
   crew,
   assignedAction,
   isPlanning,
+  isExecution,
   onActionSelect,
   isActionDisabled,
   onClear,
@@ -117,6 +154,7 @@ function CrewActionSlot({
   crew: AnyCrew | Captain;
   assignedAction: PlayerActionType | null;
   isPlanning: boolean;
+  isExecution: boolean;
   onActionSelect: (actionType: PlayerActionType) => void;
   isActionDisabled?: (actionType: PlayerActionType) => boolean;
   onClear: () => void;
@@ -127,7 +165,7 @@ function CrewActionSlot({
 
   return (
     <div
-      className={`panel p-2.5 min-w-[130px] ${
+      className={`panel p-2.5 min-w-0 sm:min-w-[130px] ${
         isDisabled ? 'opacity-40' : ''
       } ${assignedAction ? 'border-l-2' : ''}`}
       style={assignedAction ? {
@@ -156,6 +194,7 @@ function CrewActionSlot({
       {!isDisabled && (
         <div className="relative">
           <select
+            aria-label={`Action for ${crew.name}`}
             value={assignedAction ?? ''}
             onChange={(e) => {
               if (e.target.value) {
@@ -191,8 +230,10 @@ function CrewActionSlot({
             </span>
           </div>
           <button
+            type="button"
             onClick={onClear}
             className="text-xs text-gravity-muted hover:text-red-400 transition-colors w-5 h-5 flex items-center justify-center rounded hover:bg-red-500/10"
+            aria-label={`Clear ${crew.name}'s action`}
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -204,12 +245,16 @@ function CrewActionSlot({
 
       {/* Disabled state */}
       {isDisabled && (
-        <div className="text-[10px] text-red-400/80 italic flex items-center gap-1">
+        <div className={`text-[10px] italic flex items-center gap-1 ${isExecution ? 'text-blue-300/80' : 'text-red-400/80'}`}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
             <circle cx="12" cy="12" r="10" />
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
           </svg>
-          {crew.status === 'unconscious' ? 'Unconscious' : 'Unavailable'}
+          {crew.status === 'unconscious'
+            ? 'Unconscious'
+            : isExecution && assignedAction
+              ? 'Configure in dashboard'
+              : 'Unavailable'}
         </div>
       )}
     </div>
@@ -227,6 +272,7 @@ export function ActionBar() {
     selectCrew,
     selectActionSlot,
     setExecutionConfirmed,
+    isNetworkSubmitting,
   } = useGameStore();
 
   const player = currentPlayerId ? game?.players.get(currentPlayerId) : null;
@@ -257,16 +303,16 @@ export function ActionBar() {
   );
   const allActionsAssigned = assignableCrew.every((c) => assignedPrimaryCrewIds.has(c.id));
 
-  const phaseLabelMap: Record<string, string> = {
-    event: 'Event',
-    action_planning: 'Planning',
-    action_execution: 'Action Execution',
-    environment: 'Environment',
-    resolution: 'Resolution',
-  };
-
-  const phaseLabel = phaseLabelMap[game.turnPhase] ?? game.turnPhase;
-  const submitLabel = 'Advance Phase';
+  const isScheduledEventTurn = game.currentTurn % TURN_CONFIG.EVENT_FREQUENCY === 0;
+  const phaseGuidance = game.turnPhase === 'event' && !isScheduledEventTurn
+    ? {
+        ...PHASE_GUIDANCE.event,
+        description: 'No infall or Event card this turn. Continue to crew planning.',
+        buttonLabel: 'Begin Planning',
+      }
+    : PHASE_GUIDANCE[game.turnPhase];
+  const assignedActionCount = assignableCrew.filter((crew) => assignedPrimaryCrewIds.has(crew.id)).length;
+  const shouldShowActionSlots = isPlanning || isExecution;
 
   // Get assigned action for a crew member
   const getAssignedAction = (crewId: string, slot: 'primary' | 'bonus'): PlayerActionType | null => {
@@ -368,7 +414,6 @@ export function ActionBar() {
   const shouldShowBonusActionControls = canPlanBonusAction || !!plannedBonusAction;
 
   const [bonusCrewId, setBonusCrewId] = useState<string>(plannedBonusCrewId ?? '');
-  const [showValidationMessage, setShowValidationMessage] = useState(false);
 
   useEffect(() => {
     if (plannedBonusCrewId) {
@@ -481,8 +526,6 @@ export function ActionBar() {
   // Handle submit turn
   const handleSubmitTurn = () => {
     if (isExecution && !allExecutionChoicesComplete) {
-      setShowValidationMessage(true);
-      setTimeout(() => setShowValidationMessage(false), 3000);
       return;
     }
     if (isExecution && allExecutionChoicesComplete) {
@@ -492,36 +535,48 @@ export function ActionBar() {
   };
 
   return (
-    <div className="px-3 py-2" style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
-      <div className="flex items-center gap-3">
-        {/* Phase indicator */}
-        <div className="text-xs flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${
-            isPlanning ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
-          }`} />
-          <span className={isPlanning ? 'text-emerald-300 font-medium' : 'text-gravity-muted'}>
-            {phaseLabel}
-          </span>
+    <div className="px-3 py-2.5" style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        {/* Current phase briefing */}
+        <div className="min-w-0 lg:w-[230px] lg:shrink-0">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-blue-300/80">
+            <span>Phase {phaseGuidance.step} of 5</span>
+            <span className="h-px flex-1 bg-blue-400/20" aria-hidden="true" />
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${isPlanning ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+            <span className="font-display text-xs font-semibold tracking-wide text-slate-100">
+              {phaseGuidance.label}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-gravity-muted">{phaseGuidance.description}</p>
+          {isPlanning && (
+            <div className={`mt-1 text-[10px] ${allActionsAssigned ? 'text-emerald-300' : 'text-amber-300'}`}>
+              {assignedActionCount}/{assignableCrew.length} actions assigned
+            </div>
+          )}
         </div>
 
         {/* Crew action slots */}
-        <div className="flex-1 flex gap-2 overflow-x-auto pb-1">
-          {assignableCrew.map((crew) => {
-            return (
-              <CrewActionSlot
-                key={crew.id}
-                crew={crew}
-                assignedAction={getAssignedAction(crew.id, 'primary')}
-                isPlanning={isPlanning}
-                onActionSelect={(actionType) => handleActionSelect(crew, actionType, 'primary')}
-                isActionDisabled={(actionType) => isActionTypeDisabledForSlot(crew.id, 'primary', actionType)}
-                onClear={() => removePlannedAction(crew.id, 'primary')}
-              />
-            );
-          })}
+        {shouldShowActionSlots ? (
+          <div className="flex-1 grid grid-cols-2 gap-2 sm:flex sm:overflow-x-auto sm:pb-1">
+            {assignableCrew.map((crew) => {
+              return (
+                <CrewActionSlot
+                  key={crew.id}
+                  crew={crew}
+                  assignedAction={getAssignedAction(crew.id, 'primary')}
+                  isPlanning={isPlanning}
+                  isExecution={isExecution}
+                  onActionSelect={(actionType) => handleActionSelect(crew, actionType, 'primary')}
+                  isActionDisabled={(actionType) => isActionTypeDisabledForSlot(crew.id, 'primary', actionType)}
+                  onClear={() => removePlannedAction(crew.id, 'primary')}
+                />
+              );
+            })}
 
-          {shouldShowBonusActionControls && (
-            <div className="panel p-2 min-w-[160px]">
+            {shouldShowBonusActionControls && (
+              <div className="panel p-2 min-w-0 sm:min-w-[160px] col-span-2">
               <div className="text-xs font-bold truncate">Bonus Action</div>
               <div className="text-xs text-gravity-muted mb-2">
                 {canPlanBonusAction
@@ -564,6 +619,7 @@ export function ActionBar() {
                       slotLabel="Bonus slot"
                       assignedAction={getAssignedAction(beneficiary.id, 'bonus')}
                       isPlanning={isPlanning && canPlanBonusAction}
+                      isExecution={isExecution}
                       onActionSelect={(actionType) => handleActionSelect(beneficiary, actionType, 'bonus')}
                       isActionDisabled={(actionType) => isActionTypeDisabledForSlot(beneficiary.id, 'bonus', actionType)}
                       onClear={() => removePlannedAction(beneficiary.id, 'bonus')}
@@ -571,35 +627,44 @@ export function ActionBar() {
                   </div>
                 );
               })()}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 rounded-lg border border-blue-400/15 bg-blue-500/5 px-4 py-3 text-xs text-blue-100/80">
+            No crew input is required in this phase. Review the board and ship forecast, then continue when ready.
+          </div>
+        )}
 
         {/* Action buttons */}
-        <div className="flex flex-col gap-1 items-end">
+        <div className="flex flex-col gap-1 items-stretch sm:items-end">
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleSubmitTurn}
               disabled={
                 game.status !== 'in_progress' ||
-                (isPlanning && !allActionsAssigned)
+                isNetworkSubmitting ||
+                (isPlanning && !allActionsAssigned) ||
+                (isExecution && !allExecutionChoicesComplete)
               }
-              className="btn-primary text-xs disabled:opacity-30"
+              className="btn-primary text-xs whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed"
+              data-testid="phase-action-button"
             >
               <span className="flex items-center gap-1.5">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                {submitLabel}
+                {isNetworkSubmitting ? 'Submitting…' : phaseGuidance.buttonLabel}
               </span>
             </button>
           </div>
-          {showValidationMessage && getValidationMessage() && (
+          {isExecution && getValidationMessage() && (
             <div className="text-[10px] text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/30">
               {getValidationMessage()}
             </div>
           )}
-          {!isExecution && ui.lastError && (
+          {ui.lastError && (
             <div className="text-[10px] text-red-200 bg-red-950/30 px-2 py-1 rounded border border-red-500/30 max-w-[260px] text-right">
               {ui.lastError}
             </div>

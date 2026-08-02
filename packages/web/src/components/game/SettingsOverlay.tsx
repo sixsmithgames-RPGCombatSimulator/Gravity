@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { SHIP_SECTIONS, type AnyCrew, type AnySpaceObject, type Captain, type GameState, type PlayerState, type Ship, type ShipSection } from '@gravity/core';
+import { AccessibleDialog } from './AccessibleDialog';
 
 type ScenarioPlayer = {
   id: string;
@@ -359,29 +360,23 @@ export function SettingsOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={handleClose}>
-      <div
-        className="max-w-3xl w-full bg-gravity-surface/95 border border-gravity-border shadow-2xl rounded-lg px-6 py-5"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div>
-            <div className="text-[11px] tracking-[0.25em] uppercase text-gravity-muted">Settings</div>
-            <div className="text-sm text-gravity-muted">Dev-only scenario editor (JSON import/export)</div>
-          </div>
-          <button type="button" className="btn px-3 py-1 text-sm" onClick={handleClose}>
-            Close
-          </button>
-        </div>
-
+    <AccessibleDialog
+      open={ui.settingsOpen}
+      onClose={handleClose}
+      eyebrow="Developer settings"
+      title="Scenario editor"
+      description="Development-only JSON import and export controls."
+      size="large"
+    >
         {error && (
-          <div className="mb-3 rounded border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+          <div role="alert" className="mb-3 rounded border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
         <textarea
-          className="w-full h-[420px] rounded border border-gravity-border bg-slate-950/40 px-3 py-2 font-mono text-[12px] text-slate-100 outline-none focus:ring-2 focus:ring-gravity-accent"
+          aria-label="Scenario JSON"
+          className="h-[min(420px,55dvh)] w-full rounded border border-gravity-border bg-slate-950/40 px-3 py-2 font-mono text-[12px] text-slate-100 outline-none focus:ring-2 focus:ring-gravity-accent"
           value={text}
           onChange={(event) => setText(event.target.value)}
           spellCheck={false}
@@ -404,7 +399,6 @@ export function SettingsOverlay() {
             Apply
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

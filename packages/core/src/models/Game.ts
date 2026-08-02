@@ -248,7 +248,7 @@ export type TurnActions = Record<string, PlayerAction[]>;
  *
  * Single source of truth: All player-specific state here
  * Crew location stored in crew objects, not duplicated
- * Life support computed from ship sections, not stored
+ * Life-support power stored once on the ship and converted to crew capacity
  */
 export interface PlayerState {
   id: string;
@@ -426,66 +426,4 @@ export class GameUtils {
     return false;
   }
 
-  /**
-   * Calculate victory points for a player
-   * Purpose: Determine final score
-   * Parameters:
-   *   - player: Player state
-   *   - escaped: Whether player escaped
-   *   - firstToEscape: Whether player was first to escape
-   * Returns: Total victory points
-   * Side effects: None (pure function)
-   *
-   * Victory points (from rulebook):
-   * - First to escape: 50 points
-   * - Escaped: 25 points
-   * - Mission completion: 25 + 10 per tier
-   * - Functioning sections: 5 points each
-   * - Fully powered sections: +5 points each
-   * - Upgrades installed: 5 points each
-   * - Fully powered upgrades: +5 points each
-   * - Active crew: 5 points (basic), 10 points (captain/officers)
-   * - Hull, shields, power: 1 point each
-   */
-  static calculateVictoryPoints(
-    player: PlayerState,
-    escaped: boolean,
-    firstToEscape: boolean
-  ): number {
-    let points = 0;
-
-    // Escape points
-    if (firstToEscape) {
-      points += 50;
-    } else if (escaped) {
-      points += 25;
-    }
-
-    // Mission points
-    for (const mission of player.missions) {
-      if (mission.objectives.primary.completed) {
-        points += mission.objectives.primary.points;
-      }
-      if (mission.objectives.secondary?.completed) {
-        points += mission.objectives.secondary.points;
-      }
-    }
-
-    // Ship section points
-    // (Implementation would iterate sections and calculate)
-
-    // Crew points
-    const activeCrew = player.crew.filter(c => c.status === 'active');
-    for (const crew of activeCrew) {
-      points += crew.type === 'basic' ? 5 : 10;
-    }
-    if (player.captain.status === 'active') {
-      points += 10;
-    }
-
-    // Hull, shields, power (1 point each)
-    // (Implementation would sum these)
-
-    return points;
-  }
 }

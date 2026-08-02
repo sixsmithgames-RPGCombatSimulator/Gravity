@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AnyCrew, Captain } from '../models/Crew';
 import type { GameSettings } from '../models/Game';
 import { BoardUtils } from '../models';
-import { SHIP_SECTIONS } from '../constants/GameConfig';
+import { INFALL_CONFIG, SHIP_SECTIONS } from '../constants/GameConfig';
 import { addPlayerToGame, applyEventPhase, createInitialShip, createNewGame, startGame } from './index';
 
 function createGameWithPlayers(params: { gameId: string; playerCount: number }) {
@@ -73,6 +73,26 @@ function getMinimumDistanceToShips(game: ReturnType<typeof createGameWithPlayers
 }
 
 describe('event infall object spawns', () => {
+  it.each([2, 3, 4, 5, 6])('starts a supported %i-player game with unique, balanced positions', (playerCount) => {
+    const started = createGameWithPlayers({
+      gameId: `supported-player-count-${playerCount}`,
+      playerCount,
+    });
+    const spaces = Array.from(started.players.values())
+      .map((player) => player.ship.position.space)
+      .sort((left, right) => left - right);
+    const ringSize = started.board.rings.at(-1)!.numSpaces;
+    const circularGaps = spaces.map((space, index) => {
+      const nextSpace = spaces[(index + 1) % spaces.length];
+      return index === spaces.length - 1
+        ? nextSpace + ringSize - space
+        : nextSpace - space;
+    });
+
+    expect(new Set(spaces).size).toBe(playerCount);
+    expect(Math.max(...circularGaps) - Math.min(...circularGaps)).toBeLessThanOrEqual(1);
+  });
+
   it('does not spawn objects on non-event turns', () => {
     const started = createGameWithPlayers({ gameId: 'event-infall-non-event', playerCount: 2 });
 
@@ -108,7 +128,7 @@ describe('event infall object spawns', () => {
     expect(afterA.board.objects).toEqual(afterB.board.objects);
   });
 
-  it('spawns between 1x and 2x playerCount objects on event turns, starting on the outer ring', () => {
+  it('spawns playerCount + 3 objects on event turns, starting on the outer ring', () => {
     const started = createGameWithPlayers({ gameId: 'event-infall-2p', playerCount: 2 });
 
     const game = {
@@ -119,8 +139,7 @@ describe('event infall object spawns', () => {
 
     const after = applyEventPhase(game);
 
-    expect(after.board.objects.length).toBeGreaterThanOrEqual(2);
-    expect(after.board.objects.length).toBeLessThanOrEqual(5);
+    expect(after.board.objects).toHaveLength(5);
 
     for (const obj of after.board.objects) {
       expect(obj.position.ring).toBe(8);
@@ -169,7 +188,7 @@ describe('event infall object spawns', () => {
     expect(selectedDistances).toEqual(bestAvailableDistances);
   });
 
-  it('scales spawn count with playerCount', () => {
+  it('scales spawn count with playerCount using the fixed rules bonus', () => {
     const started = createGameWithPlayers({ gameId: 'event-infall-3p', playerCount: 3 });
 
     const game = {
@@ -180,8 +199,7 @@ describe('event infall object spawns', () => {
 
     const after = applyEventPhase(game);
 
-    expect(after.board.objects.length).toBeGreaterThanOrEqual(3);
-    expect(after.board.objects.length).toBeLessThanOrEqual(6);
+    expect(after.board.objects).toHaveLength(6);
   });
 
   it('never spawns an object on a player ship position (safety guard)', () => {
@@ -205,7 +223,7 @@ describe('event infall object spawns', () => {
     }
   });
 
-  it('uses post-event ship positions when selecting infall spawn spaces', () => {
+  it('places infall before resolving the drawn Event card', () => {
     const started = createGameWithPlayers({ gameId: 'event-infall-after-player-flux', playerCount: 2 });
 
     const game = {
@@ -221,55 +239,38 @@ describe('event infall object spawns', () => {
       ],
     };
 
-    const after = applyEventPhase(game);
-
-    const shipPositions = new Set(
-      Array.from(after.players.values()).map(player => `${player.ship.position.ring}:${player.ship.position.space}`),
-    );
-
-    for (const obj of after.board.objects) {
-      const key = `${obj.position.ring}:${obj.position.space}`;
-      expect(shipPositions.has(key)).toBe(false);
-    }
-  });
-
-  it('places the infall hazard at the maximum available distance from ships on the outer ring', () => {
-    const started = createGameWithPlayers({ gameId: 'event-infall-hazard-distance', playerCount: 2 });
-
-    const game = {
+    const withoutEvent = applyEventPhase({
       ...started,
       currentTurn: 4,
       eventDeck: [],
-    };
-
+    });
     const after = applyEventPhase(game);
-    const hazard = after.board.objects.find((obj) => obj.type === 'hazard');
 
-    expect(hazard).toBeTruthy();
-
-    const outerRing = started.board.rings[started.board.rings.length - 1];
-    expect(outerRing).toBeTruthy();
-
-    const candidateDistances: number[] = [];
-    for (let space = 0; space < outerRing!.numSpaces; space += 1) {
-      const occupiedByShip = Array.from(started.players.values()).some(
-        (player) => player.ship.position.ring === outerRing!.index && player.ship.position.space === space,
-      );
-
-      if (occupiedByShip) {
-        continue;
-      }
-
-      candidateDistances.push(getMinimumDistanceToShips(started, outerRing!.index, space));
-    }
-
-    const hazardDistance = getMinimumDistanceToShips(
-      after as ReturnType<typeof createGameWithPlayers>,
-      hazard!.position.ring,
-      hazard!.position.space,
+    expect(after.board.objects).toEqual(withoutEvent.board.objects);
+    expect(Array.from(after.players.values()).map((player) => player.ship.position)).not.toEqual(
+      Array.from(started.players.values()).map((player) => player.ship.position),
     );
+  });
 
-    expect(hazardDistance).toBe(Math.max(...candidateDistances));
+  it('uses the documented weighted object mix after reserving one hazard', () => {
+    expect(INFALL_CONFIG.REQUIRED_HAZARD_COUNT).toBe(1);
+    expect(INFALL_CONFIG.OBJECT_TYPE_WEIGHTS).toEqual([
+      { type: 'asteroid_cluster', weight: 0.35 },
+      { type: 'debris', weight: 0.4 },
+      { type: 'wrecked_ship', weight: 0.25 },
+    ]);
+  });
+
+  it('adds exactly one hazard to every complete infall set', () => {
+    const started = createGameWithPlayers({ gameId: 'event-infall-one-hazard', playerCount: 4 });
+    const after = applyEventPhase({
+      ...started,
+      currentTurn: 4,
+      eventDeck: [],
+    });
+
+    expect(after.board.objects).toHaveLength(7);
+    expect(after.board.objects.filter((object) => object.type === 'hazard')).toHaveLength(1);
   });
 
   it('gravity flux object movement never lands on a player ship', () => {

@@ -1,6 +1,5 @@
 import {
   useGameStore,
-  computeLifeSupportCapacity,
   countLifeSupportConsumersWithRevives,
 } from '../../store/gameStore';
 import type { PlayerDiff, SectionDiff } from '../../store/gameStore';
@@ -8,10 +7,10 @@ import {
   applyPlayerActions,
   BoardUtils,
   canCrewRerouteOnePowerForManeuver,
+  calculateLifeSupportBreakdown,
   SHIP_SECTIONS,
   ShipUtils,
   POWER_CONFIG,
-  LIFE_SUPPORT_CONFIG,
   SHIP_CONNECTION_LAYOUT,
   DEFAULT_POWER_ROUTING_HUB_SECTION,
   CREW_CONFIG,
@@ -1618,10 +1617,6 @@ function SectionCard({
         ? 'border-emerald-400/50 bg-emerald-950/30 text-emerald-200'
         : 'border-amber-400/50 bg-amber-950/30 text-amber-200';
 
-  const lifeSupportContributions = ShipUtils.getLifeSupportContributions(ship);
-  const lifeSupportProvided = lifeSupportContributions[sectionKey] ?? 0;
-  const lifeSupportMax = ((CORE_SECTION_CONFIG[sectionKey] as any)?.fullyPoweredBenefits?.lifeSupport as number | undefined) ?? 0;
-
   const installedUpgradesInSection = installedUpgrades.filter((upgrade) => {
     const sectionRaw = (upgrade as { section?: unknown }).section;
     return typeof sectionRaw === 'string' && sectionRaw === sectionKey;
@@ -1646,9 +1641,7 @@ function SectionCard({
       .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value !== 0)
       .map(([key, value]) => {
         const label =
-          key === 'lifeSupport'
-            ? 'Life Support'
-            : key === 'acceleration'
+          key === 'acceleration'
               ? 'Acceleration'
               : key === 'scanRange'
                 ? 'Scan Range'
@@ -1674,7 +1667,6 @@ function SectionCard({
     `${config.label}`,
     `Hull Strength: ${section.hull}/${maxHull} (${damageLabel})`,
     `Power: ${poweredLabel}`,
-    `Life Support: ${lifeSupportProvided}${lifeSupportMax > 0 ? ` (max ${lifeSupportMax})` : ''}`,
     `Fully Powered Benefits: ${fullyPoweredBenefitsLabel}`,
     `Upgrades: ${
       installedUpgradesInSection.length > 0
@@ -1736,16 +1728,16 @@ function SectionCard({
 
   return (
     <div
-      className={`panel h-full flex flex-col p-2 border-2 ${borderClass} ${config.bgColor} ${fullyPoweredClass} ${hullDamageClass} ${routingClass} ${moveClass} ${repairClass} ${
+      className={`panel h-full min-w-0 overflow-hidden flex flex-col p-2 border-2 ${borderClass} ${config.bgColor} ${fullyPoweredClass} ${hullDamageClass} ${routingClass} ${moveClass} ${repairClass} ${
         isClickable ? 'cursor-pointer hover:border-white/60' : ''
       }`}
       title={sectionTooltipTitle}
       onClick={isClickable ? onSelectAsMoveTarget : undefined}
     >
       {/* Section header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1">
-          <div className="text-xs font-bold tracking-wide">{config.label}</div>
+      <div className="flex items-start justify-between gap-1 mb-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="text-[10px] sm:text-xs font-bold leading-tight tracking-wide break-words">{config.label}</div>
           {hasExplorerRepairKit && (
             <span
               className={`px-1 rounded border text-[9px] font-semibold ${
@@ -1893,10 +1885,13 @@ function SectionCard({
       )}
 
       <div className="mb-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="text-[11px] font-bold tracking-wide text-gravity-muted">HULL STRENGTH</div>
-            <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${hullStatusClass}`}>{hullStatus}</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-2">
+            <div className="text-[10px] sm:text-[11px] font-bold tracking-wide text-gravity-muted">
+              <span className="sm:hidden">HULL</span>
+              <span className="hidden sm:inline">HULL STRENGTH</span>
+            </div>
+            <span className={`px-1 sm:px-2 py-0.5 rounded border text-[10px] sm:text-[11px] font-semibold ${hullStatusClass}`}>{hullStatus}</span>
           </div>
           <div className="text-right text-[11px] font-semibold tabular-nums text-slate-100">
             {section.hull}/{maxHull}
@@ -1921,16 +1916,18 @@ function SectionCard({
       </div>
 
       <div className="mb-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="text-[11px] font-bold tracking-wide text-gravity-muted">POWER</div>
+        <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-2">
+            <div className="text-[10px] sm:text-[11px] font-bold tracking-wide text-gravity-muted">POWER</div>
             {powerStatus && (
-              <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${powerStatusClass}`}>{powerStatus}</span>
+              <span className={`px-1 sm:px-2 py-0.5 rounded border text-[10px] sm:text-[11px] font-semibold ${powerStatusClass}`}>{powerStatus}</span>
             )}
           </div>
           <div className="text-right text-[11px] font-semibold tabular-nums text-slate-100">
             {totalPower}/{powerMax}
-            {safeRequiredPower !== null ? ` • REQ ${safeRequiredPower}` : ''}
+            {safeRequiredPower !== null && (
+              <span className="hidden sm:inline">{` • REQ ${safeRequiredPower}`}</span>
+            )}
           </div>
         </div>
 
@@ -2025,7 +2022,7 @@ function SectionCard({
 
       {/* Crew placement indicators for this section */}
       <div className="mt-1 flex items-center justify-between gap-1">
-        <div className="flex flex-nowrap gap-0.5 max-w-[70%] overflow-hidden">
+        <div className="flex max-w-[78%] flex-nowrap gap-0.5 overflow-hidden sm:max-w-[70%]">
           {crewInSection.slice(0, 8).map((c) => {
             const role = getCrewRole(c);
             const abbrev = getCrewAbbrev(role);
@@ -2053,7 +2050,9 @@ function SectionCard({
           )}
         </div>
         <div className="text-[10px] text-gravity-muted text-right shrink-0">
-          Crew: {crewInSection.length}
+          <span className="sm:hidden">C:</span>
+          <span className="hidden sm:inline">Crew: </span>
+          {crewInSection.length}
         </div>
       </div>
     </div>
@@ -2650,7 +2649,7 @@ function SectionGridWithOverlay({
   }, [gridDimensions, sectionMeasureNonce]);
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 min-w-0 relative">
       <ShipStructureOverlay
         ship={ship}
         gridWidth={gridDimensions.width}
@@ -2660,7 +2659,7 @@ function SectionGridWithOverlay({
       />
       <div
         ref={gridRef}
-        className="relative z-10 h-full grid grid-cols-3 gap-4 p-2"
+        className="relative z-10 h-full min-w-0 grid grid-cols-3 gap-2 p-2 sm:gap-4"
       >
         {SECTION_LAYOUT.flat().map((sectionKey) => {
           const sectionState = ship.sections[sectionKey];
@@ -3005,7 +3004,7 @@ function SectionGridWithOverlay({
             <div
               key={sectionKey}
               ref={registerSectionRef(sectionKey)}
-              className="h-full"
+              className="h-full min-w-0"
             >
               <SectionCard
                 sectionKey={sectionKey as ShipSection}
@@ -3126,7 +3125,7 @@ function CrewToken({
 
   return (
     <div
-      className={`crew-token relative ${color} ${isUnconscious ? 'opacity-50 grayscale' : ''} ${
+      className={`crew-token relative shrink-0 ${color} ${isUnconscious ? 'opacity-50 grayscale' : ''} ${
         clickable ? 'cursor-pointer' : 'cursor-default hover:scale-100'
       } ${isReviveTarget ? 'ring-2 ring-green-400 ring-offset-2 ring-offset-slate-900' : ''} ${
         isStimDoctor && !isReviveTarget ? 'ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-slate-900' : ''
@@ -3297,61 +3296,16 @@ export function ShipDashboard() {
   const advancedCrew = crew.filter((c) => (c as any)?.type === 'officer');
   const basicCrew = crew.filter((c) => (c as any)?.type === 'basic');
 
-  const baseLifeSupportPower = (() => {
-    const baseLifeSupportPowerRaw = ship.lifeSupportPower;
-    return typeof baseLifeSupportPowerRaw === 'number' &&
-      Number.isFinite(baseLifeSupportPowerRaw) &&
-      baseLifeSupportPowerRaw > 0
-      ? baseLifeSupportPowerRaw
-      : 0;
-  })();
-
-  const totalLifeSupportPower = (() => {
-    let value = baseLifeSupportPower;
-
-    if (captain.captainType === 'explorer') {
-      value += 5;
-    }
-
-    const bioFilters = player.installedUpgrades.find((u) => u.id === 'bio_filters');
-    if (bioFilters) {
-      const status = getUpgradePowerStatus(bioFilters, ship);
-      if (status.isPowered) {
-        value += 3;
-      }
-    }
-
-    const bioEngine = player.installedUpgrades.find((u) => u.id === 'bio_engine');
-    if (bioEngine) {
-      const status = getUpgradePowerStatus(bioEngine, ship);
-      if (status.isPowered) {
-        value += 1;
-      }
-    }
-
-    return value;
-  })();
+  const lifeSupportBreakdown = calculateLifeSupportBreakdown(player);
+  const baseLifeSupportPower = lifeSupportBreakdown.basePoolPower;
+  const totalLifeSupportPower = lifeSupportBreakdown.totalPower;
 
   const crewRequiringLifeSupport = crew.filter((c) => CrewUtils.requiresLifeSupport(c));
   const crewRequiringLifeSupportCount = crewRequiringLifeSupport.length;
   const captainActive = captain.status === 'active';
 
-  const powerPerCrewSetting = LIFE_SUPPORT_CONFIG?.POWER_PER_CREW;
-  const powerPerCrew =
-    typeof powerPerCrewSetting === 'number' && Number.isFinite(powerPerCrewSetting) && powerPerCrewSetting > 0
-      ? powerPerCrewSetting
-      : 1;
-
-  const fallbackLifeSupportCapacity = Math.max(0, Math.floor(totalLifeSupportPower / powerPerCrew));
-
-  const lifeSupportCapacity = useMemo(() => {
-    try {
-      return computeLifeSupportCapacity(player);
-    } catch (error) {
-      console.error('Failed to compute life support capacity in ShipDashboard', error);
-      return fallbackLifeSupportCapacity;
-    }
-  }, [player, fallbackLifeSupportCapacity]);
+  const powerPerCrew = lifeSupportBreakdown.powerPerCrew;
+  const lifeSupportCapacity = lifeSupportBreakdown.capacity;
 
   const projectedLifeSupportLoad = useMemo(() => {
     try {
@@ -3380,8 +3334,7 @@ export function ShipDashboard() {
 
     const bioFilters = player.installedUpgrades.find((u) => u.id === 'bio_filters');
     if (bioFilters) {
-      const status = getUpgradePowerStatus(bioFilters, ship);
-      if (status.isPowered) {
+      if (lifeSupportBreakdown.bioFiltersBonusPower > 0) {
         lines.push('Bio-Filters: +3 power');
       } else {
         lines.push('Bio-Filters: +3 power (unpowered)');
@@ -3390,8 +3343,7 @@ export function ShipDashboard() {
 
     const bioEngine = player.installedUpgrades.find((u) => u.id === 'bio_engine');
     if (bioEngine) {
-      const status = getUpgradePowerStatus(bioEngine, ship);
-      if (status.isPowered) {
+      if (lifeSupportBreakdown.bioEngineBonusPower > 0) {
         lines.push('Bio-Engine: +1 power');
       } else {
         lines.push('Bio-Engine: +1 power (unpowered)');
@@ -4395,8 +4347,8 @@ export function ShipDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-2 h-full">
-      <Dialog.Root open={clearConfirm !== null} onOpenChange={(open) => {
+    <div className="flex min-w-0 flex-col gap-2 h-full">
+      <Dialog.Root open={clearConfirm !== null} onOpenChange={(open: boolean) => {
         if (!open) {
           setClearConfirm(null);
         }
@@ -4477,7 +4429,7 @@ export function ShipDashboard() {
 
       <Dialog.Root
         open={upgradeDetailsId !== null}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) {
             setUpgradeDetailsId(null);
           }
@@ -4625,10 +4577,10 @@ export function ShipDashboard() {
           </div>
         )}
  
-        <div className="flex w-full items-start justify-between gap-3">
-          <div className="flex flex-col gap-1 items-start text-left">
+        <div className="grid w-full grid-cols-3 items-start gap-2 sm:flex sm:justify-between sm:gap-3">
+          <div className="flex min-w-0 flex-col gap-1 items-start text-left">
             <div className="text-[10px] tracking-wide text-gravity-muted uppercase">Captain</div>
-            <div className="flex gap-1.5 flex-nowrap">
+            <div className="flex flex-wrap gap-1.5">
               {[captain].map((c) => {
                 const isReviveTarget = hasPendingRevive && c.id === currentReviveTargetId;
                 const { canSelect: canSelectReviveTarget } = getReviveCapacityStatus(c);
@@ -4686,9 +4638,9 @@ export function ShipDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1 items-center text-center">
+          <div className="flex min-w-0 flex-col gap-1 items-center text-center">
             <div className="text-[10px] tracking-wide text-gravity-muted uppercase">Advanced Crew</div>
-            <div className="flex gap-1.5 flex-nowrap justify-center">
+            <div className="flex flex-wrap gap-1.5 justify-center">
               {advancedCrew.map((c) => {
                 const isReviveTarget = hasPendingRevive && c.id === currentReviveTargetId;
                 const canSelectReviveTarget = hasPendingRevive && c.status === 'unconscious';
@@ -4770,9 +4722,9 @@ export function ShipDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1 items-end text-right">
+          <div className="flex min-w-0 flex-col gap-1 items-end text-right">
             <div className="text-[10px] tracking-wide text-gravity-muted uppercase">Basic Crew</div>
-            <div className="flex gap-1.5 flex-nowrap">
+            <div className="flex flex-wrap gap-1.5 justify-end">
               {basicCrew.map((c) => {
                 const isReviveTarget = hasPendingRevive && c.id === currentReviveTargetId;
                 const canSelectReviveTarget = hasPendingRevive && c.status === 'unconscious';

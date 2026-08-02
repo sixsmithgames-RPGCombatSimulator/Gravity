@@ -3,7 +3,7 @@
  * Root cause of creation: Need centralized configuration for database operations
  */
 
-import type { Config } from 'drizzle-kit';
+import { defineConfig } from 'drizzle-kit';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -23,13 +23,13 @@ if (!DATABASE_URL) {
   );
 }
 
-export default {
-  schema: './src/database/schema/*.ts',
+export default defineConfig({
+  schema: './src/database/schema/index.ts',
   out: './src/database/migrations',
-  driver: 'pg',
+  dialect: 'postgresql',
   dbCredentials: {
-    connectionString: DATABASE_URL,
+    url: DATABASE_URL,
   },
   verbose: true,
   strict: true,
-} satisfies Config;
+});

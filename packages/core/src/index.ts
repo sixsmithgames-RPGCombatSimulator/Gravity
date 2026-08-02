@@ -10,6 +10,7 @@ export * from './models';
 // Export all constants
 export * from './constants';
 export * from './engine';
+export * from './serialization';
 
 // Note: Engine and rules will be added in Phase 2
 // export * from './engine';

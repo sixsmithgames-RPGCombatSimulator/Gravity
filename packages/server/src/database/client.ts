@@ -6,7 +6,6 @@
 
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema';
 
 /**
  * Validate DATABASE_URL environment variable
@@ -39,11 +38,10 @@ const queryClient = postgres(DATABASE_URL, {
 /**
  * Create Drizzle ORM instance
  * Purpose: Provide type-safe database access
- * Schema: All tables and relations loaded from schema directory
  * Logger: Enable logging in development mode only
  */
-export const db = drizzle(queryClient, {
-  schema,
+export const db = drizzle({
+  client: queryClient,
   logger: process.env.NODE_ENV === 'development',
 });
 

@@ -101,6 +101,7 @@ Life support is tracked as a power pool, not a headcount track.
 - Every active crew member that requires life support consumes `2` life support power.
 - Capacity is `floor(total life support power / 2)`.
 - The Android does not require life support.
+- Ship sections do not contribute life support power unless a card or scenario explicitly says otherwise.
 
 ### Shields
 Shields absorb incoming weapon damage before hull damage unless a rule says the damage bypasses shields.
@@ -262,14 +263,12 @@ A ship completes one full orbit when it returns to the same board-relative space
 - Max hull: `12`
 - Full power required: `6`
 - Fully powered benefit: `+1` acceleration on Maneuver
-- Life support contribution when fully powered: `3`
 
 ### Engineering
 - Max hull: `18`
 - Full power required: `12`
 - Power storage: `12`
 - Fully powered benefit: `+2` power on Restore Power
-- Life support contribution when fully powered: `4`
 
 ### Drives
 - Max hull: `12`
@@ -281,20 +280,17 @@ A ship completes one full orbit when it returns to the same board-relative space
 - Max hull: `6`
 - Full power required: `6`
 - Fully powered benefit: `+2` revive bonus
-- Life support contribution when fully powered: `4`
 
 ### Sci-Lab
 - Max hull: `6`
 - Full power required: `6`
 - Fully powered benefit: `+2` scan/acquire range
-- Life support contribution when fully powered: `2`
 
 ### Defense
 - Max hull: `6`
 - Full power required: `6`
 - Power storage: `12`
 - Fully powered benefit: `+2` shields during auto-generate
-- Life support contribution when fully powered: `1`
 
 ## Damage States
 ### Functional
@@ -406,8 +402,8 @@ If a scenario does not specify officer locations, use this default:
 - Return or discard unused mission cards as needed.
 
 ### 7. Starting board positions
-- Place all player ships evenly around the outermost ring.
-- Ships must be equally spaced.
+- Place all player ships as evenly as possible around the outermost ring.
+- When exact spacing is impossible, the gaps between neighboring ships may differ by at most `1` space.
 - No ship may start in an occupied space.
 
 ### 8. Starting board objects

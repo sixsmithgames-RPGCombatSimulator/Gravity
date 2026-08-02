@@ -300,7 +300,16 @@ describe('maneuver resolution', () => {
   });
 
   it('resolves split-axis maneuver plans with the same destination as previewManeuver', () => {
-    const { game, playerId, otherPlayerId } = createScenario();
+    const ship = createFunctionalManeuverShip({
+      sections: {
+        ...createFunctionalManeuverShip().sections,
+        [SHIP_SECTIONS.DRIVES]: {
+          ...createFunctionalManeuverShip().sections[SHIP_SECTIONS.DRIVES],
+          powerDice: [2],
+        },
+      },
+    });
+    const { game, playerId, otherPlayerId } = createScenario({ ship });
     const player = game.players.get(playerId);
     expect(player).toBeTruthy();
     if (!player) {

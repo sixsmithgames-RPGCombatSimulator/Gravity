@@ -32,7 +32,6 @@ export const SECTION_CONFIG = {
     crewSlots: 2,
     fullyPoweredBenefits: {
       acceleration: 1,
-      lifeSupport: 3,
     },
   },
   [SHIP_SECTIONS.ENGINEERING]: {
@@ -42,7 +41,6 @@ export const SECTION_CONFIG = {
     crewSlots: 3,
     fullyPoweredBenefits: {
       powerGeneration: 2,
-      lifeSupport: 4,
     },
   },
   [SHIP_SECTIONS.DRIVES]: {
@@ -59,7 +57,6 @@ export const SECTION_CONFIG = {
     crewSlots: 2,
     fullyPoweredBenefits: {
       reviveBonus: 2,
-      lifeSupport: 4,
     },
   },
   [SHIP_SECTIONS.SCI_LAB]: {
@@ -69,7 +66,6 @@ export const SECTION_CONFIG = {
     crewSlots: 2,
     fullyPoweredBenefits: {
       scanRange: 2,
-      lifeSupport: 2,
     },
   },
   [SHIP_SECTIONS.DEFENSE]: {
@@ -79,7 +75,6 @@ export const SECTION_CONFIG = {
     crewSlots: 2,
     fullyPoweredBenefits: {
       shieldGeneration: 2,
-      lifeSupport: 1,
     },
   },
 } as const;
@@ -137,6 +132,21 @@ export const TURN_CONFIG = {
    * | 7-8     | 4    | 20°          | 18 turns       |
    */
   RING_ROTATION_DEGREES_BY_PAIR: [40, 40, 30, 30, 25, 25, 20, 20] as const,
+} as const;
+
+/**
+ * Infall object configuration
+ * Purpose: Define how many objects enter the gravity well on Event turns and their weighted types
+ * Source: docs/Gravity_Rules_Current.md, Object Infall and Events
+ */
+export const INFALL_CONFIG = {
+  SPAWN_COUNT_BONUS: 3,
+  REQUIRED_HAZARD_COUNT: 1,
+  OBJECT_TYPE_WEIGHTS: [
+    { type: 'asteroid_cluster', weight: 0.35 },
+    { type: 'debris', weight: 0.4 },
+    { type: 'wrecked_ship', weight: 0.25 },
+  ],
 } as const;
 
 /**
@@ -223,13 +233,13 @@ export const INITIAL_SHIP_STATE = {
     conduitConnections: { [SHIP_SECTIONS.MED_LAB]: 1, [SHIP_SECTIONS.SCI_LAB]: 1, [SHIP_SECTIONS.ENGINEERING]: 1 },
   },
   [SHIP_SECTIONS.ENGINEERING]: {
-    hull: 6,
+    hull: 9,
     powerDice: [1, 1],
     corridors: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DEFENSE]: 0 },
     conduitConnections: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DRIVES]: 0, [SHIP_SECTIONS.DEFENSE]: 0 },
   },
   [SHIP_SECTIONS.MED_LAB]: {
-    hull: 6,
+    hull: 2,
     powerDice: [],
     corridors: { [SHIP_SECTIONS.BRIDGE]: 1 },
     conduitConnections: { [SHIP_SECTIONS.BRIDGE]: 1, [SHIP_SECTIONS.DRIVES]: 0 },
@@ -269,7 +279,7 @@ export const COLLISION_DAMAGE = {
   asteroid_cluster: 12,
   /** Debris: 6 hull damage on collision */
   debris: 6,
-  /** Hostile ship: 4 hull damage on collision (adjacent attack is separate: 2d6+4) */
+  /** Hostile ship: 8 hull damage on collision (adjacent attack is separate: 2d6+4) */
   hostile_ship: 8,
   /** Wrecked ship: 9 hull damage on collision */
   wrecked_ship: 9,

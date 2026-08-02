@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:-gravity}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:?Set STAGING_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:-gravity_staging}
+    ports:
+      - "127.0.0.1:${STAGING_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${STAGING_REDIS_PASSWORD:?Set STAGING_REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    ports:
+      - "127.0.0.1:${STAGING_REDIS_PORT:-56379}:6379"
+    volumes:
+      - staging_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      CORS_ORIGIN: ${STAGING_WEB_ORIGIN:-http://127.0.0.1:4197}
+      DATABASE_URL: postgresql://${STAGING_POSTGRES_USER:-gravity}:${STAGING_POSTGRES_PASSWORD}@postgres:5432/${STAGING_POSTGRES_DB:-gravity_staging}
+      REDIS_URL: redis://:${STAGING_REDIS_PASSWORD}@redis:6379
+      CLERK_ISSUER: ${STAGING_CLERK_ISSUER:?Set STAGING_CLERK_ISSUER}
+      CLERK_AUDIENCE: ${STAGING_CLERK_AUDIENCE:-}
+      CLERK_AUTHORIZED_PARTIES: ${STAGING_WEB_ORIGIN:-http://127.0.0.1:4197}
+      JOIN_CODE_PEPPER: ${STAGING_JOIN_CODE_PEPPER:?Set STAGING_JOIN_CODE_PEPPER}
+      RATE_LIMIT_WINDOW_MS: ${STAGING_RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${STAGING_RATE_LIMIT_MAX_REQUESTS:-100}
+    ports:
+      - "127.0.0.1:${STAGING_API_PORT:-3110}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${STAGING_CLERK_PUBLISHABLE_KEY:?Set STAGING_CLERK_PUBLISHABLE_KEY}
+        VITE_API_URL: ${STAGING_API_ORIGIN:-http://127.0.0.1:3110}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:${STAGING_WEB_PORT:-4197}:5173"
+    depends_on:
+      server:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  staging_postgres_data:
+  staging_redis_data:

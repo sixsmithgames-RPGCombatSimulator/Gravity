@@ -47,6 +47,7 @@ import {
   PLAYER_CONFIG,
   BOARD_CONFIG,
   TURN_CONFIG,
+  INFALL_CONFIG,
   CORE_EVENT_CARDS,
   CORE_UPGRADE_CARDS,
   CORE_ACTION_CARDS,
@@ -188,7 +189,7 @@ function shuffleDeckWithSeed<T>(items: readonly T[], seed: string): T[] {
   return result;
 }
 
-type InfallSpawnObjectType = 'debris' | 'asteroid_cluster' | 'hazard' | 'wrecked_ship';
+type WeightedInfallSpawnObjectType = 'debris' | 'asteroid_cluster' | 'wrecked_ship';
 
 type LootAssignmentResult = {
   object: AnySpaceObject;
@@ -204,18 +205,98 @@ function shuffleInPlaceWithRng<T>(items: T[], rng: () => number): void {
   }
 }
 
-function pickWeightedInfallSpawnObjectType(rng: () => number): InfallSpawnObjectType {
+/** Validate infall configuration before it affects a deterministic Event turn. */
+function validateInfallConfig(): void {
+  const { SPAWN_COUNT_BONUS, REQUIRED_HAZARD_COUNT, OBJECT_TYPE_WEIGHTS } = INFALL_CONFIG;
+  const objectTypeWeights: readonly { type: WeightedInfallSpawnObjectType; weight: number }[] = OBJECT_TYPE_WEIGHTS;
+
+  if (!Number.isInteger(SPAWN_COUNT_BONUS) || SPAWN_COUNT_BONUS < 0) {
+    throw new Error(
+      'Cannot spawn infall objects because SPAWN_COUNT_BONUS is invalid. ' +
+        `Root cause: INFALL_CONFIG.SPAWN_COUNT_BONUS is ${SPAWN_COUNT_BONUS}. ` +
+        'Fix: Configure a non-negative integer bonus in GameConfig.',
+    );
+  }
+  if (!Number.isInteger(REQUIRED_HAZARD_COUNT) || REQUIRED_HAZARD_COUNT < 0) {
+    throw new Error(
+      'Cannot spawn infall objects because REQUIRED_HAZARD_COUNT is invalid. ' +
+        `Root cause: INFALL_CONFIG.REQUIRED_HAZARD_COUNT is ${REQUIRED_HAZARD_COUNT}. ` +
+        'Fix: Configure a non-negative integer hazard count in GameConfig.',
+    );
+  }
+  if (objectTypeWeights.length === 0) {
+    throw new Error(
+      'Cannot spawn infall objects because no object type weights are configured. ' +
+        'Root cause: INFALL_CONFIG.OBJECT_TYPE_WEIGHTS is empty. ' +
+        'Fix: Add the rulebook object types and weights in GameConfig.',
+    );
+  }
+
+  let totalWeight = 0;
+  const seenTypes = new Set<string>();
+  for (const entry of objectTypeWeights) {
+    if (seenTypes.has(entry.type)) {
+      throw new Error(
+        'Cannot spawn infall objects because an object type is configured more than once. ' +
+          `Root cause: INFALL_CONFIG.OBJECT_TYPE_WEIGHTS contains duplicate type "${entry.type}". ` +
+          'Fix: Combine duplicate entries into one weight in GameConfig.',
+      );
+    }
+    if (!Number.isFinite(entry.weight) || entry.weight <= 0) {
+      throw new Error(
+        'Cannot spawn infall objects because an object type weight is invalid. ' +
+          `Root cause: weight for "${entry.type}" is ${entry.weight}. ` +
+          'Fix: Configure every infall object weight as a positive finite number.',
+      );
+    }
+    seenTypes.add(entry.type);
+    totalWeight += entry.weight;
+  }
+
+  if (Math.abs(totalWeight - 1) > 0.000001) {
+    throw new Error(
+      'Cannot spawn infall objects because object type weights do not total 1. ' +
+        `Root cause: INFALL_CONFIG.OBJECT_TYPE_WEIGHTS totals ${totalWeight}. ` +
+        'Fix: Adjust the configured weights so they total exactly 1.',
+    );
+  }
+}
+
+/** Read one deterministic random value and fail explicitly if the RNG contract is broken. */
+function readInfallRandomValue(rng: () => number): number {
   const value = rng();
+  if (!Number.isFinite(value) || value < 0 || value >= 1) {
+    throw new Error(
+      'Cannot spawn infall objects because the random number generator returned an invalid value. ' +
+        `Root cause: expected a finite value from 0 inclusive to 1 exclusive, received ${String(value)}. ` +
+        'Fix: Ensure createSeededRng preserves the [0, 1) contract.',
+    );
+  }
+  return value;
+}
 
-  if (value < 0.35) {
-    return 'asteroid_cluster';
+/** Select an infall object using the rulebook weights in GameConfig. */
+function pickWeightedInfallSpawnObjectType(rng: () => number): WeightedInfallSpawnObjectType {
+  const value = readInfallRandomValue(rng);
+  let cumulativeWeight = 0;
+
+  for (const entry of INFALL_CONFIG.OBJECT_TYPE_WEIGHTS) {
+    cumulativeWeight += entry.weight;
+    if (value < cumulativeWeight) {
+      return entry.type;
+    }
   }
 
-  if (value < 0.75) {
-    return 'debris';
-  }
+  throw new Error(
+    'Cannot select an infall object type from the configured weights. ' +
+      `Root cause: random value ${value} exceeded cumulative weight ${cumulativeWeight}. ` +
+      'Fix: Ensure INFALL_CONFIG.OBJECT_TYPE_WEIGHTS totals 1.',
+  );
+}
 
-  return 'wrecked_ship';
+/** Calculate the rules-defined Event infall size: player count plus the configured bonus. */
+function calculateInfallSpawnCount(playerCount: number): number {
+  return playerCount + INFALL_CONFIG.SPAWN_COUNT_BONUS;
 }
 
 function assignLootToObject(params: {
@@ -490,8 +571,17 @@ function applyInfallObjectSpawns(game: GameState): GameState {
     return game;
   }
 
+  validateInfallConfig();
   const rng = createSeededRng(`event_object_spawn:${game.id}:${game.currentTurn}`);
-  const requestedSpawnCount = playerCount + 3;
+  const requestedSpawnCount = calculateInfallSpawnCount(playerCount);
+
+  if (INFALL_CONFIG.REQUIRED_HAZARD_COUNT > requestedSpawnCount) {
+    throw new Error(
+      'Cannot spawn infall objects because the required hazard count exceeds the total spawn count. ' +
+        `Root cause: required hazards=${INFALL_CONFIG.REQUIRED_HAZARD_COUNT}, total spawns=${requestedSpawnCount}. ` +
+        'Fix: Reduce REQUIRED_HAZARD_COUNT or increase SPAWN_COUNT_BONUS in GameConfig.',
+    );
+  }
 
   const spawnPositions = pickInfallSpawnPositions(game, rng, requestedSpawnCount);
 
@@ -516,7 +606,9 @@ function applyInfallObjectSpawns(game: GameState): GameState {
   const newObjects: AnySpaceObject[] = [];
 
   safeSpawnPositions.forEach((position, index) => {
-    const type = index === 0 ? 'hazard' : pickWeightedInfallSpawnObjectType(rng);
+    const type = index < INFALL_CONFIG.REQUIRED_HAZARD_COUNT
+      ? 'hazard'
+      : pickWeightedInfallSpawnObjectType(rng);
 
     const object: AnySpaceObject = {
       id: `event-infall-${game.currentTurn}-${index}`,
@@ -1063,13 +1155,11 @@ export function createInitialShip(
     sections,
     speed,
     shields,
+    lifeSupportPower: LIFE_SUPPORT_CONFIG.INITIAL_POOL,
     position,
   };
 
-  return {
-    ...baseShip,
-    lifeSupportPower: LIFE_SUPPORT_CONFIG.INITIAL_POOL,
-  };
+  return baseShip;
 }
 
 function createShipSectionStateFromInitial(initialSection: {
@@ -1646,6 +1736,78 @@ export function createNewGame(options: CreateGameOptions): GameState {
   };
 }
 
+/**
+ * Place the canonical standard-setup objects without overlapping eventual ship starting spaces.
+ * This is shared by production session creation and development fixtures so setup cannot drift.
+ */
+export function seedStandardBoardObjects(game: GameState): GameState {
+  if (game.status !== 'setup') {
+    throw new Error(
+      'Cannot seed standard board objects after the game has started. ' +
+        `Root cause: game.status is "${game.status}". ` +
+        'Fix: Call seedStandardBoardObjects after adding players and before startGame.',
+    );
+  }
+
+  const objects: AnySpaceObject[] = [];
+  const occupiedByRing = new Map<number, Set<number>>();
+  const outerRing = game.board.rings[game.board.rings.length - 1];
+  const playerCount = game.players.size;
+
+  if (outerRing && playerCount > 0) {
+    const occupied = new Set<number>();
+    for (let index = 0; index < playerCount; index += 1) {
+      occupied.add(Math.floor((index * outerRing.numSpaces) / playerCount));
+    }
+    occupiedByRing.set(outerRing.index, occupied);
+  }
+
+  const addSpread = (type: AnySpaceObject['type'], ringIndex: number, count: number): void => {
+    const ring = game.board.rings[ringIndex - 1];
+    if (!ring || count <= 0) return;
+
+    const occupied = occupiedByRing.get(ringIndex) ?? new Set<number>();
+    occupiedByRing.set(ringIndex, occupied);
+    const freeSpaces = Array.from({ length: ring.numSpaces }, (_unused, space) => space).filter(
+      (space) => !occupied.has(space),
+    );
+
+    for (let placed = 0; placed < count; placed += 1) {
+      const freeIndex = Math.floor((placed * freeSpaces.length) / count);
+      const space = freeSpaces[freeIndex];
+      if (space === undefined) {
+        throw new Error(
+          `Cannot seed standard board objects because ring ${ringIndex} has too few free spaces. ` +
+            `Root cause: attempted to place ${count} objects with ${freeSpaces.length} free spaces. ` +
+            'Fix: Increase ring capacity or reduce the canonical setup count.',
+        );
+      }
+      occupied.add(space);
+      const base = { id: `${type}-${ringIndex}-${placed}`, type, position: { ring: ringIndex, space } };
+      objects.push(
+        type === 'hostile_ship'
+          ? ({
+              ...base,
+              type: 'hostile_ship',
+              hull: HOSTILE_CONFIG.hitPointsToDestroy,
+              hasTorpedo: true,
+            } as AnySpaceObject)
+          : (base as AnySpaceObject),
+      );
+    }
+  };
+
+  addSpread('hazard', 4, 2);
+  addSpread('asteroid_cluster', 5, 3);
+  addSpread('asteroid_cluster', 7, 2);
+  addSpread('debris', 4, 2);
+  addSpread('debris', 6, 2);
+  addSpread('hostile_ship', 3, playerCount);
+  addSpread('wrecked_ship', 5, playerCount);
+
+  return { ...game, board: { ...game.board, objects } };
+}
+
 export function addPlayerToGame(game: GameState, input: AddPlayerToGameInput): GameState {
   if (game.status !== 'setup') {
     throw new Error(
@@ -1737,15 +1899,14 @@ export function startGame(game: GameState, options: StartGameOptions): GameState
   const outerRing = game.board.rings[game.board.rings.length - 1];
   const numSpaces = outerRing.numSpaces;
 
-  if (numSpaces % playerCount !== 0) {
+  if (numSpaces < playerCount) {
     throw new Error(
-      'Cannot start game because players cannot be spaced evenly around the outer ring. ' +
-      `Root cause: outer ring has ${numSpaces} spaces, which is not evenly divisible by ${playerCount} players. ` +
-      'Fix: Adjust the number of players or the SPACES_PER_RING configuration so the outer ring can be divided evenly.'
+      'Cannot start game because the outer ring has fewer spaces than players. ' +
+      `Root cause: outer ring has ${numSpaces} spaces for ${playerCount} players. ` +
+      'Fix: Increase the outer-ring space count or lower the supported player count.'
     );
   }
 
-  const spacing = numSpaces / playerCount;
   const sortedPlayers = Array.from(game.players.values()).sort(
     (a, b) => a.playerOrder - b.playerOrder,
   );
@@ -1754,7 +1915,7 @@ export function startGame(game: GameState, options: StartGameOptions): GameState
 
   for (let index = 0; index < sortedPlayers.length; index += 1) {
     const player = sortedPlayers[index];
-    const space = index * spacing;
+    const space = Math.floor((index * numSpaces) / playerCount);
 
     const ship: Ship = {
       ...player.ship,
@@ -3495,7 +3656,7 @@ function resolveRestoreActions(game: GameState, actions: ActionBatch): GameState
       let canGeneratePower = true;
       try {
         requireRestoreAllowedForCrew(workingShip, crew, actingSection, action.crewId);
-      } catch (err) {
+      } catch {
         canGeneratePower = false;
       }
 
@@ -4853,6 +5014,71 @@ function applyScanResultsForTargets(params: {
    const totalPower = sectionState.powerDice.reduce((sum, die) => sum + die, 0);
    return totalPower >= baseRequired && storedPower >= powerRequiredRaw;
  }
+
+export interface LifeSupportBreakdown {
+  basePoolPower: number;
+  explorerBonusPower: number;
+  bioFiltersBonusPower: number;
+  bioEngineBonusPower: number;
+  totalPower: number;
+  powerPerCrew: number;
+  capacity: number;
+}
+
+/** Calculate life-support power and capacity from the canonical stored pool and active bonuses. */
+export function calculateLifeSupportBreakdown(
+  player: PlayerState,
+  ship?: Ship,
+): LifeSupportBreakdown {
+  if (!player) {
+    throw new Error(
+      'Cannot calculate life support because player state is missing. ' +
+        'Root cause: calculateLifeSupportBreakdown received null or undefined. ' +
+        'Fix: Provide a complete PlayerState before evaluating life support.',
+    );
+  }
+  const resolvedShip = ship ?? player.ship;
+  if (!resolvedShip) {
+    throw new Error(
+      'Cannot calculate life support because ship state is missing. ' +
+        `Root cause: player "${player.id}" has no ship. ` +
+        'Fix: Initialize the player ship before evaluating life support.',
+    );
+  }
+
+  const basePoolPower = resolvedShip.lifeSupportPower;
+  if (typeof basePoolPower !== 'number' || !Number.isFinite(basePoolPower) || basePoolPower < 0) {
+    throw new Error(
+      'Cannot calculate life support because ship.lifeSupportPower is invalid. ' +
+        `Root cause: ship.lifeSupportPower is "${String(basePoolPower)}" for player "${player.id}". ` +
+        'Fix: Store a finite, non-negative life-support power value on every ship.',
+    );
+  }
+
+  const powerPerCrew = LIFE_SUPPORT_CONFIG.POWER_PER_CREW;
+  if (typeof powerPerCrew !== 'number' || !Number.isFinite(powerPerCrew) || powerPerCrew <= 0) {
+    throw new Error(
+      'Cannot calculate life support because LIFE_SUPPORT_CONFIG.POWER_PER_CREW is invalid. ' +
+        `Root cause: LIFE_SUPPORT_CONFIG.POWER_PER_CREW is "${String(powerPerCrew)}". ` +
+        'Fix: Configure a positive finite power-per-crew ratio.',
+    );
+  }
+
+  const explorerBonusPower = player.captain.captainType === 'explorer' ? 5 : 0;
+  const bioFiltersBonusPower = playerHasPoweredUpgrade(player, resolvedShip, 'bio_filters') ? 3 : 0;
+  const bioEngineBonusPower = playerHasPoweredUpgrade(player, resolvedShip, 'bio_engine') ? 1 : 0;
+  const totalPower = basePoolPower + explorerBonusPower + bioFiltersBonusPower + bioEngineBonusPower;
+
+  return {
+    basePoolPower,
+    explorerBonusPower,
+    bioFiltersBonusPower,
+    bioEngineBonusPower,
+    totalPower,
+    powerPerCrew,
+    capacity: Math.floor(totalPower / powerPerCrew),
+  };
+}
 
  function upgradeListHas(upgrades: UpgradeCard[] | null | undefined, upgradeId: string): boolean {
    if (!upgrades || upgrades.length === 0) {
@@ -7898,126 +8124,223 @@ export function checkAndUpdateEscapedStatus(game: GameState): GameState {
   };
 }
 
-/**
- * Calculate victory points for a player
- * Purpose: Compute final score based on game achievements
- * Parameters:
- *   - player: Player state to calculate points for
- * Returns: Victory point total
- * Side effects: None (pure function)
- *
- * Victory point sources (from rulebook):
- * - Completed missions
- * - Surviving crew
- * - Resources collected
- * - Escape bonus
- */
-export function calculateVictoryPoints(player: PlayerState, allPlayers?: readonly PlayerState[]): number {
-  let points = 0;
+export interface VictoryPointBreakdown {
+  escape: number;
+  missions: number;
+  missionBase: number;
+  missionMultiplier: number;
+  functionalSections: number;
+  fullyPoweredSections: number;
+  upgrades: number;
+  crew: number;
+  hull: number;
+  shields: number;
+  storedPower: number;
+  installedUpgradeCount: number;
+  fullyPoweredSectionCount: number;
+  activeCrewCount: number;
+  total: number;
+}
 
-  if (player.status === 'escaped') {
-    if (typeof player.escapedAtTurn !== 'number' || !Number.isFinite(player.escapedAtTurn)) {
+/** Calculate an escaped player's bonus, including same-turn first-place ties. */
+function calculateEscapeVictoryPoints(player: PlayerState, allPlayers?: readonly PlayerState[]): number {
+  if (player.status !== 'escaped') {
+    return 0;
+  }
+  if (!allPlayers) {
+    throw new Error(
+      'Cannot calculate escape victory points without the final player list. ' +
+        `Root cause: player "${player.id}" escaped, but allPlayers was not provided. ` +
+        'Fix: Pass every final PlayerState into calculateVictoryPointBreakdown or calculateVictoryPoints.',
+    );
+  }
+  if (typeof player.escapedAtTurn !== 'number' || !Number.isFinite(player.escapedAtTurn)) {
+    throw new Error(
+      'Cannot calculate victory points for an escaped player without a valid escapedAtTurn. ' +
+        `Root cause: player "${player.id}" has status "escaped" but escapedAtTurn is "${String(player.escapedAtTurn)}". ` +
+        'Fix: Record escapedAtTurn when a player transitions to escaped status.',
+    );
+  }
+
+  let earliestEscapeTurn = player.escapedAtTurn;
+  for (const candidate of allPlayers) {
+    if (candidate.status !== 'escaped') {
+      continue;
+    }
+    if (typeof candidate.escapedAtTurn !== 'number' || !Number.isFinite(candidate.escapedAtTurn)) {
       throw new Error(
-        'Cannot calculate victory points for an escaped player without a valid escapedAtTurn. ' +
-          `Root cause: player "${player.id}" has status "escaped" but escapedAtTurn is "${String(player.escapedAtTurn)}". ` +
-          'Fix: Record escapedAtTurn when a player transitions to escaped status and pass the final player list into calculateVictoryPoints.'
+        'Cannot calculate victory points because an escaped player is missing escapedAtTurn. ' +
+          `Root cause: player "${candidate.id}" has status "escaped" but escapedAtTurn is "${String(candidate.escapedAtTurn)}". ` +
+          'Fix: Ensure every escaped player records escapedAtTurn before end-game scoring runs.',
       );
     }
+    earliestEscapeTurn = Math.min(earliestEscapeTurn, candidate.escapedAtTurn);
+  }
 
-    let earliestEscapeTurn = player.escapedAtTurn;
-    if (allPlayers) {
-      for (const candidate of allPlayers) {
-        if (candidate.status !== 'escaped') {
-          continue;
-        }
-        if (typeof candidate.escapedAtTurn !== 'number' || !Number.isFinite(candidate.escapedAtTurn)) {
-          throw new Error(
-            'Cannot calculate victory points because an escaped player is missing escapedAtTurn. ' +
-              `Root cause: player "${candidate.id}" has status "escaped" but escapedAtTurn is "${String(candidate.escapedAtTurn)}". ` +
-              'Fix: Ensure every escaped player records escapedAtTurn before end-game scoring runs.'
-          );
-        }
-        if (candidate.escapedAtTurn < earliestEscapeTurn) {
-          earliestEscapeTurn = candidate.escapedAtTurn;
-        }
+  return player.escapedAtTurn === earliestEscapeTurn ? 50 : 25;
+}
+
+/** Sum completed mission tiers and reject malformed victory-point values. */
+function calculateBaseMissionPoints(player: PlayerState): number {
+  let missionPoints = 0;
+
+  for (const mission of player.missions) {
+    const objectives = [mission.objectives.primary, mission.objectives.secondary].filter(
+      (objective): objective is { description: string; points: number; completed: boolean } => Boolean(objective),
+    );
+    for (const objective of objectives) {
+      if (!Number.isFinite(objective.points) || objective.points < 0) {
+        throw new Error(
+          'Cannot calculate mission victory points because an objective has an invalid point value. ' +
+            `Root cause: mission "${mission.id}" contains points=${String(objective.points)}. ` +
+            'Fix: Configure mission objective points as finite, non-negative numbers.',
+        );
+      }
+      if (objective.completed) {
+        missionPoints += objective.points;
       }
     }
-
-    points += player.escapedAtTurn === earliestEscapeTurn ? 50 : 25;
   }
 
-  let missionPoints = 0;
-  for (const mission of player.missions) {
-    if (mission.objectives.primary.completed) {
-      missionPoints += mission.objectives.primary.points;
-    }
-    if (mission.objectives.secondary?.completed) {
-      missionPoints += mission.objectives.secondary.points;
-    }
-  }
+  return missionPoints;
+}
 
-  const hasMissionMultiplier =
-    player.captain.captainType === 'emissary' ||
-    player.crew.some((crew) => crew.type === 'officer' && crew.role === 'mission_specialist');
-  points += hasMissionMultiplier ? Math.floor(missionPoints * 1.5) : missionPoints;
+/** Calculate the full rulebook score and tie-break metadata for one player. */
+export function calculateVictoryPointBreakdown(
+  player: PlayerState,
+  allPlayers?: readonly PlayerState[],
+): VictoryPointBreakdown {
+  const escape = calculateEscapeVictoryPoints(player, allPlayers);
+  const missionBase = calculateBaseMissionPoints(player);
+  let missionMultiplier = 1;
+  if (player.captain.captainType === 'emissary') {
+    missionMultiplier *= 1.5;
+  }
+  if (player.crew.some((crew) => crew.type === 'officer' && crew.role === 'mission_specialist')) {
+    missionMultiplier *= 1.5;
+  }
+  const missions = Math.floor(missionBase * missionMultiplier);
+
+  let functionalSections = 0;
+  let fullyPoweredSections = 0;
+  let fullyPoweredSectionCount = 0;
+  let hull = 0;
+  let storedPower = 0;
 
   for (const section of Object.values(SHIP_SECTIONS) as ShipSection[]) {
-    if (ShipUtils.isFunctional(player.ship, section)) {
-      points += 5;
-    }
-    if (ShipUtils.isFullyPowered(player.ship, section)) {
-      points += 5;
-    }
-
     const sectionState = player.ship.sections[section];
     if (!sectionState) {
       throw new Error(
         'Cannot calculate victory points because a ship section is missing from player.ship.sections. ' +
           `Root cause: player "${player.id}" has no state for section "${section}". ` +
-          'Fix: Ensure every ship initializes all sections before end-game scoring.'
+          'Fix: Ensure every ship initializes all sections before end-game scoring.',
       );
     }
-
-    points += sectionState.hull;
-    points += sectionState.powerDice.reduce((sum, die) => sum + die, 0);
+    if (ShipUtils.isFunctional(player.ship, section)) {
+      functionalSections += 5;
+    }
+    if (ShipUtils.isFullyPowered(player.ship, section)) {
+      fullyPoweredSections += 5;
+      fullyPoweredSectionCount += 1;
+    }
+    hull += sectionState.hull;
+    storedPower += sectionState.powerDice.reduce((sum, die) => sum + die, 0);
   }
 
-  points += player.ship.shields;
+  const lifeSupportPower = player.ship.lifeSupportPower;
+  if (typeof lifeSupportPower !== 'number' || !Number.isFinite(lifeSupportPower) || lifeSupportPower < 0) {
+    throw new Error(
+      'Cannot calculate victory points because life-support stored power is invalid. ' +
+        `Root cause: player "${player.id}" has ship.lifeSupportPower="${String(lifeSupportPower)}". ` +
+        'Fix: Store a finite, non-negative life-support power value on every ship.',
+    );
+  }
+  storedPower += lifeSupportPower;
 
-  for (const crew of player.crew) {
-    if (crew.status !== 'active') {
+  let crew = 0;
+  let activeCrewCount = 0;
+  for (const crewMember of player.crew) {
+    if (crewMember.status !== 'active') {
       continue;
     }
-    points += crew.type === 'basic' ? 5 : 10;
+    crew += crewMember.type === 'basic' ? 5 : 10;
+    activeCrewCount += 1;
   }
-
   if (player.captain.status === 'active') {
-    points += 10;
+    crew += 10;
+    activeCrewCount += 1;
   }
 
+  let upgrades = 0;
   for (const upgrade of player.installedUpgrades) {
-    points += 5;
-
-    const powerRequiredRaw = (upgrade as { powerRequired?: unknown }).powerRequired;
-    const requiresPower =
-      typeof powerRequiredRaw === 'number' && Number.isFinite(powerRequiredRaw) && powerRequiredRaw > 0;
-    if (!requiresPower) {
-      continue;
+    upgrades += 5;
+    const requiresPower = typeof upgrade.powerRequired === 'number' && upgrade.powerRequired > 0;
+    if (requiresPower && playerHasPoweredUpgrade(player, player.ship, upgrade.id)) {
+      upgrades += 5;
     }
-
-    if (!playerHasPoweredUpgrade(player, player.ship, upgrade.id)) {
-      continue;
-    }
-
-    points += 5;
-
-    const storedPowerRaw = (upgrade as { storedPower?: unknown }).storedPower;
-    if (typeof storedPowerRaw === 'number' && Number.isFinite(storedPowerRaw) && storedPowerRaw > 0) {
-      points += storedPowerRaw;
+    if (upgrade.storedPower !== undefined) {
+      if (!Number.isFinite(upgrade.storedPower) || upgrade.storedPower < 0) {
+        throw new Error(
+          'Cannot calculate victory points because an upgrade has invalid stored power. ' +
+            `Root cause: upgrade "${upgrade.id}" has storedPower=${String(upgrade.storedPower)}. ` +
+            'Fix: Store a finite, non-negative power value on installed upgrades.',
+        );
+      }
+      storedPower += upgrade.storedPower;
     }
   }
 
-  return points;
+  const shields = player.ship.shields;
+  const total =
+    escape +
+    missions +
+    functionalSections +
+    fullyPoweredSections +
+    upgrades +
+    crew +
+    hull +
+    shields +
+    storedPower;
+
+  return {
+    escape,
+    missions,
+    missionBase,
+    missionMultiplier,
+    functionalSections,
+    fullyPoweredSections,
+    upgrades,
+    crew,
+    hull,
+    shields,
+    storedPower,
+    installedUpgradeCount: player.installedUpgrades.length,
+    fullyPoweredSectionCount,
+    activeCrewCount,
+    total,
+  };
+}
+
+/** Compare two score breakdowns using the rulebook's ordered tie-breakers. */
+export function compareVictoryPointBreakdowns(
+  left: VictoryPointBreakdown,
+  right: VictoryPointBreakdown,
+): number {
+  const comparisons = [
+    right.total - left.total,
+    right.missions - left.missions,
+    right.installedUpgradeCount - left.installedUpgradeCount,
+    right.fullyPoweredSectionCount - left.fullyPoweredSectionCount,
+    right.activeCrewCount - left.activeCrewCount,
+    right.storedPower - left.storedPower,
+  ];
+
+  return comparisons.find((comparison) => comparison !== 0) ?? 0;
+}
+
+/** Calculate a player's final victory-point total from the canonical breakdown. */
+export function calculateVictoryPoints(player: PlayerState, allPlayers?: readonly PlayerState[]): number {
+  return calculateVictoryPointBreakdown(player, allPlayers).total;
 }
 
 /**
@@ -8029,14 +8352,12 @@ export function calculateVictoryPoints(player: PlayerState, allPlayers?: readonl
  * Side effects: None (pure function)
  *
  * Game end conditions:
- * - All players have escaped (victory - compare scores)
- * - All players are wrecked (defeat)
- * - Mix: some escaped, some wrecked (partial victory)
+ * - Half or more players escaped
+ * - No active players remain
  */
 export function checkGameEndConditions(game: GameState): GameState {
   const players = Array.from(game.players.values());
 
-  // Count player states
   const activePlayers = players.filter(p => p.status === 'active');
   const escapedPlayers = players.filter(p => p.status === 'escaped');
   const wreckedPlayers = players.filter(p => p.status === 'wrecked');
@@ -8178,11 +8499,12 @@ export function applyEventPhase(game: GameState): GameState {
 
   const [topCard, ...remainingDeck] = game.eventDeck;
 
-  const afterEffects = applyEventEffects(game, topCard);
-  const afterSpawns = applyInfallObjectSpawns(afterEffects);
+  // Infall is placed first so the drawn Event can affect the newly arrived objects, matching the rules sequence.
+  const afterSpawns = applyInfallObjectSpawns(game);
+  const afterEffects = applyEventEffects(afterSpawns, topCard);
 
   return {
-    ...afterSpawns,
+    ...afterEffects,
     eventDeck: remainingDeck,
     lastResolvedEvent: topCard,
   };
@@ -9536,46 +9858,8 @@ export function applyAutoGenerate(game: GameState): GameState {
       }
     }
 
-    // Step 2: Check life support vs crew that require life support
-    const baseLifeSupportPowerRaw = updatedShip.lifeSupportPower;
-    let lifeSupportPower = (() => {
-      if (typeof baseLifeSupportPowerRaw === 'undefined') {
-        return 0;
-      }
-      if (typeof baseLifeSupportPowerRaw !== 'number' || !Number.isFinite(baseLifeSupportPowerRaw)) {
-        throw new Error(
-          'Cannot apply auto-generate because ship.lifeSupportPower is invalid. ' +
-            `Root cause: ship.lifeSupportPower is "${String(baseLifeSupportPowerRaw)}" for player "${player.id}". ` +
-            'Fix: Ensure ship.lifeSupportPower is a finite number.'
-        );
-      }
-      if (baseLifeSupportPowerRaw < 0) {
-        throw new Error(
-          'Cannot apply auto-generate because ship.lifeSupportPower is negative. ' +
-            `Root cause: ship.lifeSupportPower is ${baseLifeSupportPowerRaw} for player "${player.id}". ` +
-            'Fix: Ensure ship.lifeSupportPower is never set below 0.'
-        );
-      }
-      return baseLifeSupportPowerRaw;
-    })();
-    if (player.captain.captainType === 'explorer') {
-      lifeSupportPower += 5;
-    }
-    if (playerHasPoweredUpgrade(player, updatedShip, 'bio_filters')) {
-      lifeSupportPower += 3;
-    }
-    if (playerHasPoweredUpgrade(player, updatedShip, 'bio_engine')) {
-      lifeSupportPower += 1;
-    }
-    const powerPerCrew = LIFE_SUPPORT_CONFIG.POWER_PER_CREW;
-    if (typeof powerPerCrew !== 'number' || !Number.isFinite(powerPerCrew) || powerPerCrew <= 0) {
-      throw new Error(
-        'Cannot apply auto-generate because LIFE_SUPPORT_CONFIG.POWER_PER_CREW is invalid. ' +
-          `Root cause: LIFE_SUPPORT_CONFIG.POWER_PER_CREW is "${String(powerPerCrew)}". ` +
-          'Fix: Configure a positive finite power-per-crew ratio.',
-      );
-    }
-    const lifeSupportCapacity = Math.floor(lifeSupportPower / powerPerCrew);
+    // Step 2: Check the independent life-support pool against active consumers.
+    const lifeSupportCapacity = calculateLifeSupportBreakdown(player, updatedShip).capacity;
     const crewRequiringLifeSupport = player.crew.filter(c => CrewUtils.requiresLifeSupport(c));
     const crewRequiringLifeSupportCount = crewRequiringLifeSupport.length;
 

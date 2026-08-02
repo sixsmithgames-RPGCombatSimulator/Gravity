@@ -9,6 +9,7 @@ export * from './users';
 export * from './games';
 export * from './players';
 export * from './turns';
+export * from './sessions';
 
 // Note: This file serves as the single point of import for database schemas
 // Usage: import { users, games, players } from '@/database/schema';

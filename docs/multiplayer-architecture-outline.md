@@ -4,9 +4,19 @@
 - Define how Gravity delivers real session-based multiplayer without any "hot-seat" local pass-and-play mode.
 - Cover connectivity, authority model, session lifecycle, persistence, APIs, client UX, reliability, and testing so implementation can proceed with clear contracts.
 
+## Implementation status — 2026-08-02
+
+- Complete: versioned `GameStateSnapshotV1` serializer/deserializer with `Map` and `Date` round-trip coverage.
+- Complete: separate liveness/readiness HTTP application with injected dependency checks and sanitized responses.
+- Complete: Clerk-verified private create/join/ready/start/resume, PostgreSQL snapshots, authenticated Socket.IO rooms, browser lobby/reconnect, and idempotent versioned complete-turn submission.
+- Complete: CI migration/persistence test against PostgreSQL plus unit, HTTP, socket, and JWT-signature coverage.
+- Complete: pinned React auth bootstrap, Clerk authorized-party checks, Vercel CSP, shared Redis HTTP/socket abuse limits, and committed two-browser full-turn/resume coverage.
+- Complete: hosted TLS Redis configuration, isolated PostgreSQL/Redis staging rehearsal, two waves of 12 reconnects, guarded backup/restore, and promotion/rollback/recovery runbook.
+- Next: external real-Clerk staging certification, explicit leave/forfeit, setup choices, telemetry/alerts, sustained load testing, and distributed fan-out/locking before multi-replica scale.
+
 ## Current baseline (observed)
-- Backend: `packages/server/src/server.ts` exposes Express + Socket.IO, Redis is wired for future pub/sub/caching, but only emits a `connected` event.
-- Frontend: `packages/web/src/App.tsx` boots a local mock game via `createMockGame` and uses Zustand store for all state; no real session/join flow.
+- Backend: Express exposes authenticated session APIs, Socket.IO authorizes membership before joining rooms, PostgreSQL owns durable state, and Redis remains available for future multi-instance locks/fan-out.
+- Frontend: `packages/web/src/App.tsx` boots through create/join/resume, hydrates authoritative snapshots, and uses local engine authority only for explicit non-network development fixtures.
 - Docs: commercial polish statement flags incomplete multiplayer infrastructure and need for real session lifecycle.
 
 ## Goals and constraints

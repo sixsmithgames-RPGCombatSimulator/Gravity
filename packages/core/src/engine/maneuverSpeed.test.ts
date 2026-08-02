@@ -177,6 +177,6 @@ describe('maneuver speed/velocity updates', () => {
     );
 
     expect(updatedShip.speed).toBe(1);
-    expect(updatedShip.position.ring).toBe(3);
+    expect(updatedShip.position.ring).toBe(game.players.get('player-1')!.ship.position.ring - 1);
   });
 });

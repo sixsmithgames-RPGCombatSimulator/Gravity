@@ -33,7 +33,7 @@ async function runMigrations() {
   // Create migration connection
   // Note: Use different connection for migrations to avoid conflicts
   const migrationClient = postgres(DATABASE_URL, { max: 1 });
-  const db = drizzle(migrationClient);
+  const db = drizzle({ client: migrationClient });
 
   try {
     // Execute migrations from migrations folder

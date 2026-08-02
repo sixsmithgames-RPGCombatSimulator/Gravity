@@ -5,50 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Gravity - A tactical space survival board game" />
     <title>Gravity - Space Fleet Commander</title>
-    <!-- Sixsmith Games Auth Guard -->
-    <script>
-      (function() {
-        /**
-         * Purpose: Client-side guard that enforces Clerk sign-in before loading Gravity.
-         * Change rationale: Prior gate blocked signed-in users lacking a plan; launch rule now treats Gravity as free-core once authenticated.
-         * Behavior: Only shows the sign-in prompt when no Clerk user is present; signed-in users proceed without plan checks.
-         * Side effects: Replaces document body with a gate UI when the user is not authenticated.
-         */
-        var PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuc2l4c21pdGhnYW1lcy5jb20k';
-        var SIGN_IN_URL = 'https://www.sixsmithgames.com/sign-in?redirect_url=' + encodeURIComponent(window.location.href);
-
-        /**
-         * Purpose: Render a blocking gate with a CTA.
-         * Parameters:
-         *   - message: Explanation shown to the user.
-         *   - url: Destination for the primary button.
-         *   - btnText: Text displayed on the primary button.
-         * Side effects: Replaces entire document body with gate markup to halt app rendering when unauthenticated.
-         */
-        function showGate(message, url, btnText) {
-          document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0a0e1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;text-align:center;padding:2rem;">'
-            + '<div style="font-size:3rem;margin-bottom:1rem;">🚀</div>'
-            + '<h1 style="font-size:2rem;font-weight:800;margin-bottom:0.5rem;">Gravity</h1>'
-            + '<p style="color:#93c5fd;margin-bottom:2rem;max-width:400px;">' + message + '</p>'
-            + '<a href="' + url + '" style="background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;padding:0.875rem 2rem;border-radius:50px;text-decoration:none;font-weight:700;font-size:1rem;">' + btnText + '</a>'
-            + '<a href="https://www.sixsmithgames.com" style="margin-top:1rem;color:#6b7280;font-size:0.875rem;text-decoration:none;">&larr; Back to Sixsmith Games</a>'
-            + '</div>';
-        }
-
-        var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-        script.setAttribute('data-clerk-publishable-key', PUBLISHABLE_KEY);
-        script.onload = function() {
-          window.Clerk.load().then(function() {
-            var user = window.Clerk.user;
-            if (!user) {
-              showGate('Sign in to your Sixsmith Games account to access Gravity.', SIGN_IN_URL, 'Sign In to Play →');
-            }
-          });
-        };
-        document.head.appendChild(script);
-      })();
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />

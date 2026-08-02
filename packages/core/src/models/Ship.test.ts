@@ -9,11 +9,11 @@ import { SHIP_SECTIONS } from '../constants/GameConfig';
 
 describe('ShipUtils', () => {
   describe('calculateLifeSupport', () => {
-    it('should return 0 for ship with no powered sections', () => {
+    it('should return 0 when the stored life-support pool is empty', () => {
       /**
-       * Test case: Ship with no power
+       * Test case: Ship with no life-support power
        * Expected: 0 life support
-       * Root cause of test: Verify life support calculation when no sections powered
+       * Root cause of test: Verify life support calculation from the independent pool
        */
       const ship: Ship = {
         sections: {
@@ -26,6 +26,7 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 0,
         position: { ring: 7, space: 0 },
       };
 
@@ -33,11 +34,11 @@ describe('ShipUtils', () => {
       expect(lifeSupport).toBe(0);
     });
 
-    it('should return 3 when only Bridge is fully powered', () => {
+    it('should support one crew slot for every 2 stored power', () => {
       /**
-       * Test case: Bridge fully powered (power die at 6)
-       * Expected: 3 life support
-       * Root cause of test: Verify Bridge provides 3 life support per rulebook
+       * Test case: Initial pool of 6 stored power
+       * Expected: 3 supported crew slots
+       * Root cause of test: Verify the canonical power-to-crew conversion
        */
       const ship: Ship = {
         sections: {
@@ -50,6 +51,7 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 6,
         position: { ring: 7, space: 0 },
       };
 
@@ -57,11 +59,11 @@ describe('ShipUtils', () => {
       expect(lifeSupport).toBe(3);
     });
 
-    it('should return 14 when all sections fully powered', () => {
+    it('should round down partial capacity and ignore powered ship sections', () => {
       /**
-       * Test case: All sections fully powered
-       * Expected: 3 + 4 + 4 + 2 + 1 = 14 life support
-       * Root cause of test: Verify total life support from all sections
+       * Test case: All sections fully powered with 7 power in the life-support pool
+       * Expected: 3 supported crew slots
+       * Root cause of test: Verify sections no longer generate life support
        */
       const ship: Ship = {
         sections: {
@@ -74,11 +76,12 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 7,
         position: { ring: 7, space: 0 },
       };
 
       const lifeSupport = ShipUtils.calculateLifeSupport(ship);
-      expect(lifeSupport).toBe(14);
+      expect(lifeSupport).toBe(3);
     });
   });
 
@@ -100,6 +103,7 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 6,
         position: { ring: 7, space: 0 },
       };
 
@@ -126,6 +130,7 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 6,
         position: { ring: 7, space: 0 },
       };
 
@@ -153,6 +158,7 @@ describe('ShipUtils', () => {
         },
         speed: 0,
         shields: 0,
+        lifeSupportPower: 6,
         position: { ring: 7, space: 0 },
       };
 

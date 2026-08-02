@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AnyCrew, Captain } from '../models/Crew';
 import type { GameSettings, PlayerState, TurnActions } from '../models/Game';
 import type {
   BotActionResolutionLogEvent,

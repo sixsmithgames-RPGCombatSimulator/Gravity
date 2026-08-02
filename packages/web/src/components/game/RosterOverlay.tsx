@@ -9,6 +9,7 @@ import {
   type OfficerType,
   type PlayerState,
 } from '@gravity/core';
+import { AccessibleDialog } from './AccessibleDialog';
 
 const ADVANCED_CREW_NAMES = [
   'Avery Chen',
@@ -237,34 +238,24 @@ export function RosterOverlay() {
   const usedNames = new Set(Object.values(officerNames));
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-      onClick={handleClose}
+    <AccessibleDialog
+      open={ui.rosterOpen}
+      onClose={handleClose}
+      eyebrow="Roster"
+      title="Build your command crew"
+      description="Select your Captain and two advanced crew members."
     >
-      <div
-        className="max-w-xl w-full bg-gravity-surface/95 border border-gravity-border shadow-2xl rounded-lg px-6 py-5"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div>
-            <div className="text-[11px] tracking-[0.25em] uppercase text-gravity-muted">Roster</div>
-            <div className="text-sm text-gravity-muted">Select your Captain and Advanced Crew</div>
-          </div>
-          <button type="button" className="btn px-3 py-1 text-sm" onClick={handleClose}>
-            Close
-          </button>
-        </div>
-
         {error && (
-          <div className="mb-3 rounded border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+          <div role="alert" className="mb-3 rounded border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
         <div className="flex flex-col gap-4">
           <div>
-            <div className="text-xs text-gravity-muted mb-1">Captain</div>
+            <label htmlFor="roster-captain" className="block text-xs text-gravity-muted mb-1">Captain</label>
             <select
+              id="roster-captain"
               className="w-full rounded border border-gravity-border bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-gravity-accent"
               value={selectedCaptainType}
               onChange={(event) => {
@@ -296,13 +287,14 @@ export function RosterOverlay() {
               {officers.length === 0 && (
                 <div className="text-sm text-gravity-muted">No advanced crew found on this roster.</div>
               )}
-              {officers.map((officer) => (
+              {officers.map((officer, officerIndex) => (
                 <div
                   key={officer.id}
                   className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_200px] sm:gap-3 items-start"
                 >
                   <div className="flex flex-col gap-1">
                     <input
+                      aria-label={`Advanced crew ${officerIndex + 1} name`}
                       className="w-full rounded border border-gravity-border bg-slate-950/40 px-3 py-1.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-gravity-accent"
                       value={officerNames[officer.id] ?? officer.name}
                       onChange={(event) => {
@@ -330,6 +322,7 @@ export function RosterOverlay() {
                     </button>
                   </div>
                   <select
+                    aria-label={`Advanced crew ${officerIndex + 1} role`}
                     className="w-full rounded border border-gravity-border bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-gravity-accent"
                     value={selectedOfficerRoles[officer.id] ?? officer.role}
                     onChange={(event) => {
@@ -381,7 +374,6 @@ export function RosterOverlay() {
             Apply
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

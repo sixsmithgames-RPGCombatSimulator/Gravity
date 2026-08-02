@@ -6,6 +6,8 @@ node_modules/
 # Testing
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
 
 # Production builds
 dist/
@@ -47,6 +49,7 @@ yarn-error.log*
 
 # Build artifacts
 *.tsbuildinfo
+.artifacts/
 
 # Large non-code assets (repo should stay code-focused)
 Action Cards/

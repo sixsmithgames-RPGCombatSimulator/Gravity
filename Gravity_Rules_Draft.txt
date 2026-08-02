@@ -28,10 +28,10 @@ Each player gets 24 power dice, 10 hull dice, 16 conduits, 5 corridors, and 8 cr
 Bridge section - set a Power die at 6, set each Hull die at 3. 
 Between the Bridge and the adjacent sections (Med-Lab, Engineering, Sci-Lab) place 1 conduit and 1 corridor chit over their damaged (printed on the game mat) counterparts.
 Engineering section - set each Power die at 1, set each Hull die at 3.
-Med-Lab section - set the Hull die at 2.
+Med-Lab section - set the Hull die at 6.
 Your ship has a SPEED of 0 (not marked on the console).
 Your Shields are at 0.
-Your Life Support is at 3 (because your Bridge is fully powered, the marker goes on the lower whole number which is a 2).
+Your Life Support pool starts with 6 POWER. At 2 POWER per active crew, it can support the Captain and two Officers (3 crew total).
 Players may select which token represents their ship, starting with the youngest player first and proceeding to the left. Everyone places their ship token on the game board on the outermost ring nearest the owner and equidistant from the other players' ships.
 There are 6 captain cards, you may shuffle and deal them randomly to players (one each) or hand all of them to the youngest player who selects one and passes the remaining cards to the player on the right who then choses one and passes the remainder and so on until each player has a captain card. Discard any remaining. Read the Captains section later on for the starting bonuses and apply those bonuses to your ship now.
 There are 8 officer cards, you may shuffle and deal them randomly to players (two each) or hand all of them to the oldest player who selects one and passes the remaining cards to the player on the left who then choses one and passes the remainder and so on until each player has two officer cards. Discard any remaining. Place the captain and officers on your ship’s console and the remaining crew cards nearby to be placed on the console as you revive them.
@@ -86,9 +86,9 @@ You are the captain. You have your ship and your crew, and you’re trying to su
 More About Your Ship
 Your ship is divided into sections. Each section requires at least 1 hull point and 1 power to function. Use the hull and power counters (a d6 for each) in the placeholders for each section.
 Power
-When all power counters in a section are at 6, the section is fully powered. All bonuses are shown under the power counters for each section. Bonuses available from fully powered sections are counted from the beginning of an Action played. Fully powered sections also provide a certain amount of life support which increases the life support meter shown underneath the crew dossier slots at the top of your console. 
+When the total power in a section meets that section's listed requirement, the section is fully powered. All bonuses are shown under the power counters for each section. Bonuses available from fully powered sections are counted from the beginning of an Action played. Section power does not generate life support; life support uses its own stored POWER pool.
 Life Support
-At the end of the turn, if you have more crew than you have life support for, choose which crew fall unconscious. If life support can be restored quickly (by the end of the next turn) those crew will automatically revive but have no actions that turn, otherwise they must be revived again as normal.
+Each 2 POWER in the Life Support pool supports 1 active crew; round down when the pool contains an odd amount. At the end of the turn, unsupported crew fall unconscious in this order: basic crew, Officers, then the Captain. Androids do not require life support. Unconscious crew must be revived as normal.
 Hull 
 Add and remove Hull points from your ships console for each point of damage repaired or suffered. Zero hull points is a damaged section. Damage from the environment is usually applied randomly to the ship. More on this later.
 
@@ -101,10 +101,10 @@ There are eight orbit rings grouped into the four color categories: Green, Yello
 Each color category of orbit rotates independently of each other but all in the same direction. You may choose if the rotation is counterclockwise or clockwise but once set does not change for that game. For the purposes of maneuvering the direction you have chosen for the rings is considered “forward”.
 
 On the board are various objects, more will be added during the game, and they will damage your ship if you end the turn with your ship and the object on the same space. Here is a brief damage summary for them:
-Hazards - Subtract 2 life support if within 2 spaces and take 2 damage.
+Hazards - Subtract 2 POWER from the Life Support pool if within 2 spaces and take 3 hull damage.
 Asteroid clusters - 12 hull damage.
 Debris - 6 damage
-Hostile ships - 4 hull damage, or get within 3 spaces and they fire their 1 torp at you, get adjacent and they perform an Attack action doing 6 damage. If attacked while adjacent it will retaliate doing 6 damage.
+Hostile ships - 8 hull damage on collision. At 2-3 spaces they fire their 1 torp for 6 damage; when adjacent they attack for 2d6+4 damage. If attacked while adjacent they retaliate for 2d6+4 damage.
 Wrecked ships - 9 damage
 Functional space station - 12 hull damage. If attacked while within 3 spaces it will retaliate doing 18 damage.
 A Few Basics
@@ -170,10 +170,10 @@ Functional space station - whatever brought you here has brought many others as 
 As you navigate around you will get close to these objects, some will have resources you can use while others should just be avoided. Refer to the Actions section later on.
 
 Your ships CONSOLE (personal game mat)
-Your ships console tells you several very important things, almost everything you’ll need to survive. The main portion of you console shows each of your ship’s sections. Toward the top you have a slots to place your specific crew members as well as the standard ships crew and underneath is the required LIFE SUPPORT which tells you how many active CREW you can currently support. Each section of your ship has indicators that show you important information: The HULL integrity of each section, the POWER requirements for that section to be fully powered and how much POWER is currently routed to that section, the CREW currently in that section, and the benefits if the section is functional and fully powered. Two indicators on the right of your console show: current SHIELD level, and current SPEED. 
+Your ships console tells you several very important things, almost everything you’ll need to survive. The main portion of you console shows each of your ship’s sections. Toward the top you have slots to place your specific crew members as well as the standard ships crew, plus the separate LIFE SUPPORT pool and the number of active CREW it can currently support. Each section of your ship has indicators that show you important information: The HULL integrity of each section, the POWER requirements for that section to be fully powered and how much POWER is currently routed to that section, the CREW currently in that section, and the benefits if the section is functional and fully powered. Two indicators on the right of your console show current SHIELD level and current SPEED.
 At the beginning of the game your ship is not in the best shape, about half your ships sections are in need of repair (see game set up for determining which areas of your ship are damaged). Your ship is just barely moving forward and you and your officers are the only members of the crew that are conscious. Yea, it’s pretty rough. But more about this later. So many sections and so little time - Sure would be nice if you had some more help right?
 Your CREW
-Your crew is alive, according to presumably functional internal scanners, but life support is at critical levels. This is your first big decision in this crisis. Fortunately life support is built-in to each section of the ship so the more sections you have working the more crew you can revive and support. Reviving crew members is extremely beneficial but isn’t required. Each crew member has benefits aligned with their skill set which will make more sense if described later on - see CREW MEMBERS. 
+Your crew is alive, according to presumably functional internal scanners, but life support is at critical levels. This is your first big decision in this crisis. Life support has its own stored POWER pool, so supporting more crew requires committing more of your limited POWER to that pool. Reviving crew members is extremely beneficial but isn’t required. Each crew member has benefits aligned with their skill set which will make more sense if described later on - see CREW MEMBERS.
 Captains
 A crew is only as good as their captain, and a captain is no good without a crew. There are six different captains, each has their own abilities and specialties, including effects on their crew as their leadership inspires or aids them. A captain on the Bridge provides their inspiration for all crew. But sometimes the captain is needed elsewhere on the ship, and when not on the bridge only the crew in the same section as the captain will benefit from the captain. The captain may perform any actions from the Bridge but that section specified on the Action card must be fully powered and connected to the Bridge. The captains have all the same skills of each basic crew member making them useful in any capacity. Plus each captain has special abilities which are as follows:
 Merchant - With a superior intuition garnered from many years of space trading the Merchant captain has an easier time of finding the resources needed. Any time you perform the Acquire action to gain a resource you will also gain a random basic resource. Your ship starts with 2 random upgrades. 
@@ -186,7 +186,7 @@ Technologist - With plenty of funding and the cutting edge tech from thousands o
 
 Emissary - With a zeal rarely matched by even the most fanatical faithful followers, the Emissary captain’s crew are so convinced of their abilities they sometimes manifest in extraordinary feats when the captain inspires them. At the beginning of each turn you may choose one of your basic crew to be inspired and gain a +2 in addition to the normal skill bonus when performing an Action that turn. Completing your mission will win the recognition you know you deserve - you count 1.5X mission VP at the end of the game (combines with Mission Specialist bonus).
 
-Explorer - With insatiable wanderlust and inexhaustible courage backed by competence, quick thinking, and a bit of luck the Explorer captain has a tough ship and a tougher crew. The bridge provides 5 life support in addition to any powered sections. Your crew are easier to revive and get back to their stations requiring only 8 revive tokens. After the start of the game, select one of your damaged systems and place a repair kit there. Using that repair kit will restore 2 hull points, 1 power conduit, and 1 corridor with a single repair action; choose wisely.
+Explorer - With insatiable wanderlust and inexhaustible courage backed by competence, quick thinking, and a bit of luck the Explorer captain has a tough ship and a tougher crew. Add 5 bonus POWER when calculating the Life Support pool's crew capacity. Your crew are easier to revive and get back to their stations requiring only 8 revive tokens. After the start of the game, select one of your damaged systems and place a repair kit there. Using that repair kit will restore 2 hull points, 1 power conduit, and 1 corridor with a single repair action; choose wisely.
 Crew Members
 There are two types of crew members, the basic and officers. The basic crew are on every ship, they are the core group needed to run the ship and are trained in specific sections of the ship to maximize their effectiveness. While they are better suited to certain tasks and thus have benefits when performing them, all basic crew and officers can perform any Action.
 Basic Crew
@@ -241,19 +241,19 @@ Fervent focus: once per turn select a crewmember to use their Action toward Asse
 First Officer - 
 Competence: Perform any Action as any basic crew member with an additional +1 wherever they get a “+”.
 Life Support
-Your ship's life support system isn’t technically functional, but it is providing just enough for now and you can make it produce more by repairing and supplying power to each section of the ship. The more crew you have active the harder the system has to work, and again it isn’t working well. The amount of life support required is shown toward the top of your console corresponding to the number of currently active crew. If you have more life support than indicated but not enough for the next crew member, just leave the marker at what you can support. At the end of your turn any active crew that are not supported for any reason will fall unconscious and need to be revived again.
+Your ship's life support system has a separate stored POWER pool. It starts with 6 POWER, and every 2 POWER supports 1 active crew; always round down. POWER may be restored directly to this pool or routed between it and a ship section. POWER in the Life Support pool does not power a ship section, and POWER in a ship section does not support crew. Captain and upgrade bonuses add to the pool only when calculating capacity; they do not become routable stored POWER. At the end of your turn, active crew beyond the supported capacity fall unconscious and must be revived again. Basic crew fall unconscious first, followed by Officers and then the Captain. Androids do not consume life support.
 
 Ship sections
 For each section you have you can put crew, power, and upgrades into it. The number of circles represent the number of crew that can be placed at one time. When you move your crew from section to section you will place their token on the appropriate unoccupied circle. The squares labeled PWR represent a place holder power and the amount required to power each is 6. Power can be stored. Once you have a functional section (at least 1 hull point and 1 power), place a crew member in it and then simply play an action card associated with that section to get something out of it. Here is a list of sections, what they need, and what you get:
 Bridge - The brains of the ship, complete with artificial intelligence. All the sensor readings and ship information feeds into this location. Your Science Lab has more equipment for scanning and retrieving items but your Bridge will do in a pinch. And this is where you need to maneuver you ship from. Objects and debris can damage your ship so watch out! 
 Hull: 12 
 Power required: 6
-Benefit: With full power you can perform a Maneuver action and gain +1 Acceleration each turn, and generate 3 life support 
+Benefit: With full power you can perform a Maneuver action and gain +1 Acceleration each turn
 Engineering - This is the heart of your ship. You and your crew can use this to generate some much needed POWER and once it is fully powered it will make generating POWER easier. You can store power and spare parts here and install some helpful upgrades as well.
 Hull: 18 
 Power required: 12
 Power storage: 12
-Benefit: With full power you get 2 additional POWER when generating POWER, and generate 4 life support
+Benefit: With full power you get 2 additional POWER when generating POWER
 Drives - You won’t be going anywhere without these. Repair them and supply them with power and they will turn that into the acceleration needed to maneuver you ship around and through the hazards. Note your crew do not enter the engine section, they can access it from Engineering for repairs and the maneuvering action happens on the Bridge.
 Hull: 12
 Power storage: 18
@@ -261,16 +261,16 @@ Benefit: With even the slightest bit of POWER they will move your ship
 Medical Lab - Some say it is not an essential section but regardless it does have some really helpful tools to revive your crew faster. Assign crew and supply with power to reap the benefits. You can still try slapping the crew back to health if you prefer, and that can be done anywhere but I recommend you use a med kit. 
 Hull: 6
 Power required: 6
-Benefit: With full power add 2 when reviving crew in this section, and generate 4 life support
+Benefit: With full power add 2 when reviving crew in this section
 Science Lab - With this section functioning you can Scan debris, wrecks, asteroids, and other ships more accurately and save precious time. Then acquire your finds (resources and upgrades).
 Hull: 6
 Power required: 6
-Benefit: With full power add 2 to the range of your Scans and Aquire actions, and generate 2 life support
+Benefit: With full power add 2 to the range of your Scan and Acquire actions
 Defensive systems: Once these are functioning again it is time to get your shields up and go hunting. Supply with plenty of power to make sure your efforts aren’t wasted and would-be hunters will think twice before starting something with you.
 Hull: 6
 Power required: 6
 Power storage: 12 - needed to charge weapons
-Benefit: With full power increase SHIELDs by 2 at the end of your turn, and generate 1 life support
+Benefit: With full power increase SHIELDs by 2 at the end of your turn
 
 RESOURCES
 Power
@@ -383,7 +383,7 @@ Generate - Your engineering room contains the ships power source. It has been da
 
 You can also collect up spare parts for sections of the ship and store them for the eventual repairs. Roll a d6. Certain crew will give a bonus to your roll. You need to get a total of 6 points to collect up a spare parts kit. If your result is 8 or more you get two kits. Use the d6 to hold the place for points toward spare parts if 6 was not reached.
 
-From your functioning and powered defensive systems, or the bridge, you can convert 1 POWER from anywhere in the ship to increase SHIELDs by 1. Taking power from other sections loses the benefits, including life support, from that section.
+From your functioning and powered defensive systems, or the bridge, you can convert 1 POWER from anywhere in the ship to increase SHIELDs by 1. Taking POWER from a section may cause it to lose its fully powered benefits. Taking POWER from the Life Support pool may leave crew unsupported at the end of the turn.
 
 Revive - Is there a doctor on board? Play this card to work on reviving a crew member. Details of reviving a crew member are:
 Choose a crew member from your incapacitated crew cards to revive and roll a d6. Performing this action with a Doctor crewman will add 2 to your roll. If you are using a powered Med Lab add 2 to your roll. You need to get a total of 6 points to revive a crewman. If your result is 8 or more the crew can also perform their move and action this turn. Use the d6 to hold the place for points toward revival if 6 was not reached.
@@ -427,7 +427,7 @@ Environment damage -
 If your ship ends its turn in a space touching an orbit other than a green orbit which is when your ship will start to feel some of the more severe effects from gravity. The more severe damage alway occurs when closer to the center, which is represented by different color rings. This generally means losing hull integrity along with some additional damage to power conduits and corridors. You may assign the damage following the normal damage rules. The amount of damage your ship suffers is as follows and shown on the game board for quick reference: 
 YELLOW orbit - 2 hull points 
 ORANGE orbit - 4 hull points, and 1 power conduit is damaged
-RED orbit - 8 hull points, and 2 power conduits is damaged, and 1 corridor
+RED orbit - 8 hull points, and 2 power conduits are damaged, and 1 corridor is damaged
 
 Hostile ships: are small craft that arrived here much the way you and the other captains did. They move 1d3 spaces toward (move them the shortest route) toward the nearest player, but they will never intentionally collide or move into range of a hazard. 
 They are dangerous to player ships, equipped with decent weapons and 1 torp. Once per turn they will attack immediately, with 2d6 plus 4, any adjacent player. This can occur at any point during their move. If they are 2 or 3 spaces away from a player they will fire their 1 torpedo. 
@@ -466,11 +466,11 @@ There are several possible upgrades to your ship. Upgrades are represented by Up
 2 Ion engine - Increases the ACCELERATION generated from maneuver action by 1
 2 Plasma engine - Increases the number of POWER tokens from generate action by 1
 2 Nanobots - Med Lab now provides a +3 on revive roll.
-4 Bio-filters - Automatically generates 3 LIFE SUPPORT each turn
+4 Bio-filters - While powered, add 3 bonus POWER when calculating Life Support capacity
 1 Teleporter - Acquire action is a free immediate action after Scanning.
 2 Neutron calibrator -1 to collision check rolls.
 1 Shield Modulator - take half damage when subtracting damage from shields
-1 Bio-engine - plus 1 LIFE SUPPORT per powered section, excludes thrusters
+1 Bio-engine - While powered, add 1 bonus POWER when calculating Life Support capacity
 4 High Density plates - take half damage from environment damage 
 1 A.I. Defense - Scan of enemy ship is a free automatic action when attacking.
 
@@ -484,7 +484,7 @@ Once a section is reduced to 0 hull points the remaining damage points from a ta
 Optional (harder) - Escalating damage: Normally you may spread out damage as you see fit. Taking a single hull point from a section isn’t too much to worry about, unless it was the last hull point. But if more than 1 hull point is taken from a section when applying damage your ship will start to come apart, see below to determine the additional damage to conduits and corridors leading to that section: 
 3 or 4 HULL points = power conduit overloads
 5 or 6 HULL points = power conduit overloads and a corridor collapses
-7+ HULL points = all power conduits overload, section is disabled, lose all power in that section - note this changes the amount of life support available at the end of this turn. 
+7+ HULL points = all power conduits overload, section is disabled, and all POWER in that section is lost. The separate Life Support pool is unaffected unless the damage specifically says otherwise.
 Reducing a section to 0 hull points means the section is damaged as well as disabled and any crew in that section are knocked unconscious and will have to be revived again.
 
 Example Combat: An Imperialist captain first scans a Pirate ship, targeting the Engineering section, and then opens fire. Using everything available, 2 torps are launched by the Captain via the Bridge section, and two crew members fire weapons from the Defenses section - A tactician and a Master tactician. The Space Pirate captain is alerted to the incoming fire and simultaneously retaliates! 
@@ -497,8 +497,8 @@ Ultimately the Space Pirate captain is in a terrible position and may very well 
 
 Other Damage:
 YELLOW orbit - 2 hull points 
-ORANGE orbit - 3 hull points, and 1 power conduit is damaged
-RED orbit - 4 hull points, and 2 power conduits is damaged, and 1 corridor 
+ORANGE orbit - 4 hull points, and 1 power conduit is damaged
+RED orbit - 8 hull points, and 2 power conduits are damaged, and 1 corridor is damaged
 Your ship will stop taking damage from the gravity well if you are in the green orbit.
 If you are suffering damage from collisions following the COLLISION CHECK procedure described earlier. 
 
@@ -534,16 +534,16 @@ Currently writing this - IDEA the Officers are unique from any abilities of the 
 
 
 YOUR SHIP - How bad is it?
-Bridge - Fully powered, half hull points, all conduits and corridors connected are intact
-Engineering - 1 power, half hull points, 1 conduit and the corridor to the Bridge are intact, the rest are damaged
-Med Lab - Disabled, 2 Hull points
-Engines - Damaged, all power conduits overloaded
-Science Lab - Damaged, corridors connected are damaged
-Defenses - Damaged, corridors connected are damaged
+Bridge - Fully powered with 6 hull. One conduit and one corridor to each adjacent section (Med-Lab, Engineering, and Science Lab) are intact.
+Engineering - 2 power (1 on each die) and 6 hull. One conduit and the corridor to the Bridge are intact; the links to Drives and Defense are damaged.
+Med Lab - Disabled with 6 hull. One conduit and the corridor to the Bridge are intact; the conduit to Drives is damaged.
+Drives - Damaged, with all power conduits overloaded.
+Science Lab - Damaged. Its corridor and conduit to the Bridge are intact; its links to Defense are damaged.
+Defense - Damaged, with all connected conduits and corridors damaged.
 
 You may want to quickly refer to Ship Damage where the difference between “damaged” and “disabled” sections are explained.
 
-Your ship has a SPEED of 1. From your starting position you can see that you are going to begin falling at the end of your first turn. Remember that as you fall you will gain SPEED so be sure to track it on your console. 
+Your ship has a SPEED of 0. From your starting position you can see that you are going to begin falling at the end of your first turn. Remember that as you fall you will gain SPEED, so be sure to track the whole ship's speed on your console.
 
 ACTION CARDS
 Each player gets their own deck of action cards containing a limited number of the various actions you can perform each turn. The number of actions you may perform each turn is equal to the number of active crew you have plus 2 for the captain. Each action requires one card. If you don’t have enough cards or enough crew you cannot perform more actions that turn.
@@ -590,6 +590,7 @@ Escaped: 25 points
 Completing your mission (each mission) tier
 First tier: 25 initial points
 Second tier: 10 additional points
+Emissary and Mission Specialist bonuses each multiply mission points by 1.5. If both apply, use both multipliers and round down only after the final multiplier.
 
 Each ship section
 Functioning: 5 points 
@@ -604,7 +605,7 @@ Captain and Officers: 10 points
 And 1 point for each of the following:
 	Hull
 	Shield
-	Stored/Charging power
+	Stored/Charging power, including POWER in the Life Support pool
 	
 Wrecked
 	There are no additional points for being wrecked

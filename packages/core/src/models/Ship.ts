@@ -4,7 +4,7 @@
  * Side effects: None (type definitions and interfaces)
  */
 
-import { SHIP_SECTIONS, ShipSection, SECTION_CONFIG } from '../constants/GameConfig';
+import { LIFE_SUPPORT_CONFIG, ShipSection, SECTION_CONFIG } from '../constants/GameConfig';
 
 /**
  * Ship section state
@@ -46,17 +46,18 @@ export interface ShipPosition {
  * - sections: State of all 6 sections
  * - speed: Current forward speed
  * - shields: Current shield level
+ * - lifeSupportPower: Power stored in the ship's independent life-support pool
  * - position: Location on game board
  *
  * Single source of truth: All ship data stored here, no duplication
- * Life support is computed from powered sections, not stored
+ * Life support is stored independently from section power
  * Functional/damaged status computed from hull/power, not stored
  */
 export interface Ship {
   sections: Record<ShipSection, ShipSectionState>;
   speed: number;
   shields: number;
-  lifeSupportPower?: number;
+  lifeSupportPower: number;
   position: ShipPosition;
 }
 
@@ -66,77 +67,33 @@ export interface Ship {
  */
 export class ShipUtils {
   /**
-   * Calculate total life support from powered sections
-   * Purpose: Compute life support capacity
+   * Calculate crew capacity from the ship's stored life-support power
+   * Purpose: Convert the independent power pool into supported crew slots
    * Parameters:
    *   - ship: Current ship state
-   * Returns: Total life support points available
+   * Returns: Number of crew slots supported by the base pool
    * Side effects: None (pure function)
-   *
-   * Root cause of implementation: Life support is derived from section states,
-   * not stored separately (single source of truth principle)
    */
   static calculateLifeSupport(ship: Ship): number {
-    const contributions = this.getLifeSupportContributions(ship);
+    const power = ship.lifeSupportPower;
+    if (typeof power !== 'number' || !Number.isFinite(power) || power < 0) {
+      throw new Error(
+        'Cannot calculate life support because ship.lifeSupportPower is invalid. ' +
+          `Root cause: ship.lifeSupportPower is "${String(power)}". ` +
+          'Fix: Store a finite, non-negative life-support power value on every ship.',
+      );
+    }
 
-    return Object.values(contributions).reduce((sum, value) => sum + value, 0);
-  }
+    const powerPerCrew = LIFE_SUPPORT_CONFIG.POWER_PER_CREW;
+    if (typeof powerPerCrew !== 'number' || !Number.isFinite(powerPerCrew) || powerPerCrew <= 0) {
+      throw new Error(
+        'Cannot calculate life support because LIFE_SUPPORT_CONFIG.POWER_PER_CREW is invalid. ' +
+          `Root cause: LIFE_SUPPORT_CONFIG.POWER_PER_CREW is "${String(powerPerCrew)}". ` +
+          'Fix: Configure a positive finite power-per-crew ratio.',
+      );
+    }
 
-  /**
-   * Get life support contributions by section
-   * Purpose: Provide a breakdown of how much life support each fully powered section contributes
-   * Parameters:
-   *   - ship: Current ship state
-   * Returns: Record mapping ShipSection -> life support points contributed
-   * Side effects: None (pure function)
-   *
-   * Root cause of implementation: UI and engine consumers need a detailed view
-   * of life support sources without duplicating configuration values.
-   */
-  static getLifeSupportContributions(ship: Ship): Record<ShipSection, number> {
-    const contributions: Record<ShipSection, number> = {} as Record<ShipSection, number>;
-
-    // Bridge provides life support when fully powered
-    contributions[SHIP_SECTIONS.BRIDGE as ShipSection] = this.isFullyPowered(
-      ship,
-      SHIP_SECTIONS.BRIDGE,
-    )
-      ? 3
-      : 0;
-
-    // Engineering provides life support when fully powered
-    contributions[SHIP_SECTIONS.ENGINEERING as ShipSection] = this.isFullyPowered(
-      ship,
-      SHIP_SECTIONS.ENGINEERING,
-    )
-      ? 4
-      : 0;
-
-    // Med Lab provides life support when fully powered
-    contributions[SHIP_SECTIONS.MED_LAB as ShipSection] = this.isFullyPowered(
-      ship,
-      SHIP_SECTIONS.MED_LAB,
-    )
-      ? 4
-      : 0;
-
-    // Sci Lab provides life support when fully powered
-    contributions[SHIP_SECTIONS.SCI_LAB as ShipSection] = this.isFullyPowered(
-      ship,
-      SHIP_SECTIONS.SCI_LAB,
-    )
-      ? 2
-      : 0;
-
-    // Defense provides life support when fully powered
-    contributions[SHIP_SECTIONS.DEFENSE as ShipSection] = this.isFullyPowered(
-      ship,
-      SHIP_SECTIONS.DEFENSE,
-    )
-      ? 1
-      : 0;
-
-    return contributions;
+    return Math.floor(power / powerPerCrew);
   }
 
   /**

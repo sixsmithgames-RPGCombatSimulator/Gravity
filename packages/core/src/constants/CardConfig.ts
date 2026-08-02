@@ -63,12 +63,12 @@ export const CORE_MISSION_CARDS = [
     objectives: {
       primary: {
         description: 'Reach ring 1 at least once',
-        points: 10,
+        points: 25,
         completed: false,
       },
       secondary: {
         description: 'Be the only player who reached ring 1 during the game',
-        points: 15,
+        points: 10,
         completed: false,
       },
     },
@@ -81,12 +81,12 @@ export const CORE_MISSION_CARDS = [
     objectives: {
       primary: {
         description: 'Complete 5 full orbits',
-        points: 10,
+        points: 25,
         completed: false,
       },
       secondary: {
         description: 'Acquire 5 objects',
-        points: 15,
+        points: 10,
         completed: false,
       },
     },
@@ -99,12 +99,12 @@ export const CORE_MISSION_CARDS = [
     objectives: {
       primary: {
         description: 'Resolve 6 Attack actions against hostile ships',
-        points: 10,
+        points: 25,
         completed: false,
       },
       secondary: {
         description: 'Destroy 2 hostile ships',
-        points: 15,
+        points: 10,
         completed: false,
       },
     },
@@ -117,12 +117,12 @@ export const CORE_MISSION_CARDS = [
     objectives: {
       primary: {
         description: 'Install 1 upgrade',
-        points: 10,
+        points: 25,
         completed: false,
       },
       secondary: {
         description: 'Install 3 upgrades',
-        points: 15,
+        points: 10,
         completed: false,
       },
     },
@@ -248,7 +248,7 @@ export const CORE_UPGRADE_CARDS = [
     powerRequired: 6,
     section: 'med_lab',
     effects: {
-      rulesText: 'Med-Lab 3 Life Support',
+      rulesText: 'Life Support Pool: +3 Power while powered',
     },
   },
   {
@@ -424,7 +424,7 @@ export const CORE_UPGRADE_CARDS = [
     powerRequired: 6,
     section: 'drives',
     effects: {
-      rulesText: 'Drive: +1 Life Support each turn',
+      rulesText: 'Life Support Pool: +1 Power while powered',
     },
   },
   {
@@ -548,7 +548,7 @@ export const CORE_CAPTAIN_CARDS = [
     captainType: 'explorer',
     effects: {
       rulesText:
-        'The bridge provides 5 life support in addition to any powered sections. Your crew are easier to revive and get back to their stations requiring only 8 revive tokens. After the start of the game, select one of your damaged systems and place a repair kit there; using that repair kit will restore 2 hull points, 1 power conduit, and 1 corridor with a single repair action.',
+        'Add 5 bonus power when calculating life-support capacity. Your crew are easier to revive and get back to their stations, requiring only 8 revive tokens. After the start of the game, select one damaged system and place a repair kit there; using it restores 2 hull points, 1 power conduit, and 1 corridor with a single repair action.',
     },
   },
 ] as const;
@@ -649,13 +649,13 @@ export const CORE_OFFICER_CARDS = [
     effects: {
       rulesText:
         'Competence: stands in for any basic role (as long as they are in the correct section).\n' +
-        'Maneuver: +2 acceleration.\n' +
+        'Maneuver: +1 acceleration.\n' +
         'Repair: 2× repairs.\n' +
-        'Restore: +3 power; +2 shields when restoring in Defense.\n' +
-        'Scan/Acquire: +2 range when scanning from the Sci-Lab.\n' +
-        'Revive: +2.\n' +
-        'Attack: +3 damage.\n' +
-        'Assemble: +2 on Med-Kit / Probe.',
+        'Restore: +2 power; +1 shield when restoring in Defense.\n' +
+        'Scan/Acquire: +1 range when scanning from the Sci-Lab.\n' +
+        'Revive: +1.\n' +
+        'Attack: +1 damage.\n' +
+        'Assemble: +1 on Medical Kit / Probe.',
     },
   },
 ] as const;

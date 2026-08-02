@@ -12,6 +12,12 @@ RUN npm ci
 COPY packages/core packages/core
 COPY packages/web packages/web
 
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ARG VITE_API_URL=http://localhost:3000
+RUN test -n "$VITE_CLERK_PUBLISHABLE_KEY" || (echo "VITE_CLERK_PUBLISHABLE_KEY build argument is required" && exit 1)
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build -w @gravity/core
 RUN npm run build -w @gravity/web
 

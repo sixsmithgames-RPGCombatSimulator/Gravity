@@ -10,6 +10,7 @@ import {
   addPlayerToGame,
   applyAutoGenerate,
   applyPlayerActions,
+  calculateVictoryPointBreakdown,
   calculateVictoryPoints,
   createInitialShip,
   createNewGame,
@@ -899,7 +900,7 @@ describe('captain abilities', () => {
     expect(nonExplorerPlayer!.captain.status).toBe('unconscious');
   });
 
-  it('Emissary and Mission Specialist: completed mission points are multiplied by 1.5', () => {
+  it('Emissary and Mission Specialist: mission multipliers apply independently and stack', () => {
     const mission = {
       id: 'mission-1',
       name: 'Mission',
@@ -985,9 +986,40 @@ describe('captain abilities', () => {
       missions: [mission],
     });
 
+    const stackedScenario = addTwoPlayersAndStart({
+      game: createBaseGame(),
+      playerCaptainType: 'emissary',
+      playerShip: ship,
+      playerCrew: [actor, missionSpecialist],
+      playerCaptainLocation: SHIP_SECTIONS.BRIDGE,
+      otherShip,
+    });
+    const stackedPlayer = stackedScenario.game.players.get(stackedScenario.playerId)!;
+
+    const baselineMission = calculateVictoryPointBreakdown({
+      ...baselinePlayer,
+      missions: [mission],
+    }).missions;
+    const emissaryMission = calculateVictoryPointBreakdown({
+      ...emissaryPlayer,
+      missions: [mission],
+    }).missions;
+    const missionSpecialistMission = calculateVictoryPointBreakdown({
+      ...missionSpecialistPlayer,
+      missions: [mission],
+    }).missions;
+    const stackedMission = calculateVictoryPointBreakdown({
+      ...stackedPlayer,
+      missions: [mission],
+    }).missions;
+
     expect(emissaryPoints - baselinePoints).toBe(5);
     expect(missionSpecialistPoints - baselinePoints).toBe(15);
     expect(missionSpecialistPoints - emissaryPoints).toBe(10);
+    expect(baselineMission).toBe(10);
+    expect(emissaryMission).toBe(15);
+    expect(missionSpecialistMission).toBe(15);
+    expect(stackedMission).toBe(22);
   });
 
   it('Technologist: basic crew with an attack bonus gets an additional +1 damage', () => {

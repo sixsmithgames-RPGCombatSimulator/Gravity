@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
+import type { JSX } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import {
   applyPlayerActions,
@@ -1479,7 +1480,7 @@ export function GameBoard() {
       <div className="absolute top-3 right-3 z-20 flex flex-col gap-1">
         <button
           type="button"
-          className="btn-secondary w-8 h-8 flex items-center justify-center text-sm leading-none"
+          className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-sm leading-none"
           onClick={() => setBoardZoom(ui.boardZoom + 0.1)}
           aria-label="Zoom in"
         >
@@ -1487,7 +1488,7 @@ export function GameBoard() {
         </button>
         <button
           type="button"
-          className="btn-secondary w-8 h-8 flex items-center justify-center text-sm leading-none"
+          className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-sm leading-none"
           onClick={() => setBoardZoom(ui.boardZoom - 0.1)}
           aria-label="Zoom out"
         >
@@ -1495,7 +1496,7 @@ export function GameBoard() {
         </button>
         <button
           type="button"
-          className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+          className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
           onClick={() => setBoardOffset({ x: 0, y: 0 })}
           aria-label="Center board"
           title="Center"
@@ -1506,7 +1507,7 @@ export function GameBoard() {
           <div />
           <button
             type="button"
-            className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+            className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
             onClick={() => setBoardOffset({ x: ui.boardOffset.x, y: ui.boardOffset.y - PAN_STEP })}
             aria-label="Pan up"
             title="Pan up"
@@ -1516,7 +1517,7 @@ export function GameBoard() {
           <div />
           <button
             type="button"
-            className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+            className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
             onClick={() => setBoardOffset({ x: ui.boardOffset.x - PAN_STEP, y: ui.boardOffset.y })}
             aria-label="Pan left"
             title="Pan left"
@@ -1525,7 +1526,7 @@ export function GameBoard() {
           </button>
           <button
             type="button"
-            className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+            className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
             onClick={() => setBoardOffset({ x: 0, y: 0 })}
             aria-label="Pan center"
             title="Center"
@@ -1534,7 +1535,7 @@ export function GameBoard() {
           </button>
           <button
             type="button"
-            className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+            className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
             onClick={() => setBoardOffset({ x: ui.boardOffset.x + PAN_STEP, y: ui.boardOffset.y })}
             aria-label="Pan right"
             title="Pan right"
@@ -1544,7 +1545,7 @@ export function GameBoard() {
           <div />
           <button
             type="button"
-            className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+            className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
             onClick={() => setBoardOffset({ x: ui.boardOffset.x, y: ui.boardOffset.y + PAN_STEP })}
             aria-label="Pan down"
             title="Pan down"
@@ -1555,7 +1556,7 @@ export function GameBoard() {
         </div>
         <button
           type="button"
-          className="btn-secondary w-8 h-8 flex items-center justify-center text-xs leading-none"
+          className="btn-secondary w-8 h-8 !p-0 flex items-center justify-center text-xs leading-none"
           onClick={resetBoardView}
           aria-label="Reset board view"
         >

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "turn_submissions_player_version_unique" ON "turn_submissions" ("session_id","participant_id","expected_state_version");

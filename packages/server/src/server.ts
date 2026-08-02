@@ -1,13 +1,18 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import * as dotenv from 'dotenv';
-import Redis from 'ioredis';
 import winston from 'winston';
 import { sql } from 'drizzle-orm';
 import { db, closeDatabase } from './database/client';
+import { createApp } from './app';
+import { createClerkJwtVerifier } from './auth/identity';
+import { SessionEventBus } from './sessions/eventBus';
+import { gravitySessionGameFactory } from './sessions/gravitySessionGameFactory';
+import { PostgresSessionRepository } from './sessions/postgresSessionRepository';
+import { SessionService } from './sessions/sessionService';
+import { configureSessionSockets } from './sessions/sessionSockets';
+import { createRedisRateLimiter } from './abuse/rateLimiter';
+import { createRedisClient } from './redis/client';
 
 dotenv.config();
 
@@ -60,68 +65,68 @@ if (!CORS_ORIGIN) {
   );
 }
 
-const REDIS_HOST = process.env.REDIS_HOST;
-
-if (!REDIS_HOST) {
+const CLERK_ISSUER = process.env.CLERK_ISSUER;
+if (!CLERK_ISSUER) {
   throw new Error(
-    'REDIS_HOST environment variable is required.\n' +
-      'Root cause: REDIS_HOST is not set.\n' +
-      'Fix: Set REDIS_HOST (e.g. "redis" in Docker compose).',
+    'CLERK_ISSUER environment variable is required.\n' +
+      'Root cause: the server cannot verify browser identity tokens without the Clerk issuer.\n' +
+      'Fix: Set CLERK_ISSUER to the HTTPS issuer from the Clerk dashboard.',
   );
 }
 
-const REDIS_PORT_RAW = process.env.REDIS_PORT;
-
-if (!REDIS_PORT_RAW) {
+const JOIN_CODE_PEPPER = process.env.JOIN_CODE_PEPPER;
+if (!JOIN_CODE_PEPPER) {
   throw new Error(
-    'REDIS_PORT environment variable is required.\n' +
-      'Root cause: REDIS_PORT is not set.\n' +
-      'Fix: Set REDIS_PORT (e.g. 6379).',
+    'JOIN_CODE_PEPPER environment variable is required.\n' +
+      'Root cause: private session join codes must never be stored as plaintext.\n' +
+      'Fix: Set JOIN_CODE_PEPPER to a secret value of at least 16 characters.',
   );
 }
 
-const REDIS_PORT = Number(REDIS_PORT_RAW);
+const redis = createRedisClient();
+const rateLimiter = createRedisRateLimiter(redis);
 
-if (!Number.isInteger(REDIS_PORT) || REDIS_PORT <= 0) {
-  throw new Error(
-    'REDIS_PORT environment variable must be a positive integer.\n' +
-      `Root cause: REDIS_PORT is "${REDIS_PORT_RAW}".\n` +
-      'Fix: Set REDIS_PORT to a valid integer (e.g. 6379).',
-  );
+function positiveIntegerEnvironment(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer; received "${raw}".`);
+  }
+  return value;
 }
 
-const redis = new Redis({
-  host: REDIS_HOST,
-  port: REDIS_PORT,
-  lazyConnect: true,
+const identityVerifier = createClerkJwtVerifier({
+  issuer: CLERK_ISSUER,
+  audience: process.env.CLERK_AUDIENCE || undefined,
+  authorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES || CORS_ORIGIN)
+    .split(',')
+    .map((party) => party.trim())
+    .filter(Boolean),
+});
+const sessionEvents = new SessionEventBus();
+const sessionService = new SessionService({
+  repository: new PostgresSessionRepository(db),
+  gameFactory: gravitySessionGameFactory,
+  events: sessionEvents,
+  joinCodePepper: JOIN_CODE_PEPPER,
 });
 
-const app = express();
-
-app.use(helmet());
-app.use(express.json({ limit: '1mb' }));
-app.use(
-  cors({
-    origin: CORS_ORIGIN,
-    credentials: true,
-  }),
-);
-
-app.get('/health', async (_req, res) => {
-  try {
-    await db.execute(sql`select 1 as ok`);
-    await redis.ping();
-
-    res.status(200).json({
-      ok: true,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    res.status(500).json({
-      ok: false,
-      error: message,
-    });
-  }
+const app = createApp({
+  corsOrigin: CORS_ORIGIN,
+  readiness: {
+    checkDatabase: () => db.execute(sql`select 1 as ok`),
+    checkRedis: () => redis.ping(),
+  },
+  sessions: {
+    service: sessionService,
+    identityVerifier,
+    rateLimiter,
+    edgeRateLimitPolicy: {
+      windowMs: positiveIntegerEnvironment('RATE_LIMIT_WINDOW_MS', 15 * 60_000),
+      limit: positiveIntegerEnvironment('RATE_LIMIT_MAX_REQUESTS', 100),
+    },
+  },
 });
 
 const server = http.createServer(app);
@@ -133,8 +138,12 @@ const io = new SocketIOServer(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  socket.emit('connected', { ok: true });
+const stopSessionBroadcasts = configureSessionSockets({
+  io,
+  identityVerifier,
+  service: sessionService,
+  events: sessionEvents,
+  rateLimiter,
 });
 
 server.listen(PORT, HOST, () => {
@@ -162,6 +171,7 @@ async function shutdown(signal: string) {
     });
   });
 
+  stopSessionBroadcasts();
   await redis.quit();
   await closeDatabase();
 }
