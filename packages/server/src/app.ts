@@ -14,7 +14,7 @@ export type ReadinessDependencies = {
 };
 
 export type CreateAppOptions = {
-  corsOrigin: string;
+  corsOrigin: string | string[];
   readiness: ReadinessDependencies;
   sessions?: {
     service: SessionService;

@@ -56,3 +56,22 @@ describe('health endpoints', () => {
     expect(response.text).not.toContain('secret database hostname leaked');
   });
 });
+
+describe('CORS', () => {
+  it.each(['https://gravity-staging.sixsmithgames.com', 'https://gravity-preview.example.test'])(
+    'allows configured origin %s',
+    async (origin) => {
+      const app = createApp({
+        corsOrigin: ['https://gravity-staging.sixsmithgames.com', 'https://gravity-preview.example.test'],
+        readiness: {
+          checkDatabase: vi.fn().mockResolvedValue(undefined),
+          checkRedis: vi.fn().mockResolvedValue('PONG'),
+        },
+      });
+
+      const response = await request(app).get('/health/live').set('Origin', origin);
+
+      expect(response.headers['access-control-allow-origin']).toBe(origin);
+    },
+  );
+});

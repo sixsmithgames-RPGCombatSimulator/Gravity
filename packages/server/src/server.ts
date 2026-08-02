@@ -65,6 +65,14 @@ if (!CORS_ORIGIN) {
   );
 }
 
+const CORS_ORIGINS = CORS_ORIGIN.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+if (CORS_ORIGINS.length === 0) {
+  throw new Error('CORS_ORIGIN must contain at least one browser origin.');
+}
+
 const CLERK_ISSUER = process.env.CLERK_ISSUER;
 if (!CLERK_ISSUER) {
   throw new Error(
@@ -99,7 +107,7 @@ function positiveIntegerEnvironment(name: string, fallback: number): number {
 const identityVerifier = createClerkJwtVerifier({
   issuer: CLERK_ISSUER,
   audience: process.env.CLERK_AUDIENCE || undefined,
-  authorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES || CORS_ORIGIN)
+  authorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES || CORS_ORIGINS.join(','))
     .split(',')
     .map((party) => party.trim())
     .filter(Boolean),
@@ -113,7 +121,7 @@ const sessionService = new SessionService({
 });
 
 const app = createApp({
-  corsOrigin: CORS_ORIGIN,
+  corsOrigin: CORS_ORIGINS,
   readiness: {
     checkDatabase: () => db.execute(sql`select 1 as ok`),
     checkRedis: () => redis.ping(),
@@ -133,7 +141,7 @@ const server = http.createServer(app);
 
 const io = new SocketIOServer(server, {
   cors: {
-    origin: CORS_ORIGIN,
+    origin: CORS_ORIGINS,
     credentials: true,
   },
 });
