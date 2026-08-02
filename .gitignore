@@ -50,6 +50,7 @@ yarn-error.log*
 # Build artifacts
 *.tsbuildinfo
 .artifacts/
+.vercel/
 
 # Large non-code assets (repo should stay code-focused)
 Action Cards/
