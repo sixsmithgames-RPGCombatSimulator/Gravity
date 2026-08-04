@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 import {
   deserializeGameStateSnapshot,
+  generateAllBotActions,
   processTurn,
   serializeGameStateSnapshot,
   type GameStateSnapshotV1,
@@ -54,6 +55,16 @@ function normalizeJoinCode(raw: string): string {
 function generateJoinCode(): string {
   const bytes = randomBytes(8);
   return Array.from(bytes, (byte) => JOIN_CODE_ALPHABET[byte % JOIN_CODE_ALPHABET.length]).join('');
+}
+
+/**
+ * Purpose: Give each automated roster slot a stable, human-readable lobby label.
+ * Parameters: The one-based seat number selected by the host.
+ * Returns: The display name persisted for the bot participant.
+ * Side effects: None.
+ */
+function createBotDisplayName(seatNumber: number): string {
+  return `Bot Commander ${seatNumber}`;
 }
 
 function toSummary(session: SessionRecord): SessionSummary {
@@ -207,6 +218,77 @@ export class SessionService {
     return { session: summary, participant };
   }
 
+  /**
+   * Purpose: Let the host switch a non-host roster slot between human/open and bot control.
+   * Parameters: Authenticated identity, session id, one-based seat number, and desired bot state.
+   * Returns: Updated host access containing the authoritative roster.
+   * Side effects: May remove the current non-host occupant from the lobby and broadcasts the new roster.
+   */
+  async setBotSeat(params: {
+    identity: AuthenticatedIdentity;
+    sessionId: string;
+    seatNumber: number;
+    isBot: boolean;
+  }): Promise<SessionAccess> {
+    const current = await this.repository.findById(params.sessionId);
+    if (!current) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+    const participant = requireParticipant(current, params.identity.subject);
+    if (!participant.isHost) {
+      throw new SessionError('NOT_HOST', 'Only the session host can configure bot seats.', 403);
+    }
+    if (current.status !== 'lobby') {
+      throw new SessionError('CONFLICT', 'Bot seats can only change while the session is in the lobby.', 409);
+    }
+    if (!Number.isInteger(params.seatNumber) || params.seatNumber <= 1 || params.seatNumber > current.maxPlayers) {
+      throw new SessionError(
+        'INVALID_REQUEST',
+        `seatNumber must identify a non-host seat between 2 and ${current.maxPlayers}.`,
+        400,
+      );
+    }
+    const existing = current.participants.find((member) => member.seatNumber === params.seatNumber);
+    if (existing?.isHost) {
+      throw new SessionError('CONFLICT', 'The host seat cannot be replaced by a bot.', 409);
+    }
+    if (!params.isBot && existing && !existing.isBot) {
+      throw new SessionError('CONFLICT', 'Only a bot-controlled seat can be returned to the open roster.', 409);
+    }
+
+    const session = await this.repository.setBotSeat({
+      sessionId: params.sessionId,
+      seatNumber: params.seatNumber,
+      isBot: params.isBot,
+      displayName: createBotDisplayName(params.seatNumber),
+      now: this.now(),
+    });
+    const summary = toSummary(session);
+    this.events.publish({ type: 'session_updated', session: summary });
+    return { session: summary, participant: requireParticipant(session, params.identity.subject) };
+  }
+
+  /**
+   * Purpose: Allow the host to cancel a game before it launches.
+   * Parameters: Authenticated identity and lobby session id.
+   * Returns: Host access containing the abandoned session status.
+   * Side effects: Closes the lobby and broadcasts the cancellation to all connected members.
+   */
+  async cancelSession(identity: AuthenticatedIdentity, sessionId: string): Promise<SessionAccess> {
+    const current = await this.repository.findById(sessionId);
+    if (!current) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+    const participant = requireParticipant(current, identity.subject);
+    if (!participant.isHost) {
+      throw new SessionError('NOT_HOST', 'Only the session host can cancel the game.', 403);
+    }
+    if (current.status !== 'lobby') {
+      throw new SessionError('CONFLICT', 'Only a waiting lobby can be canceled.', 409);
+    }
+
+    const session = await this.repository.cancelLobby({ sessionId, now: this.now() });
+    const summary = toSummary(session);
+    this.events.publish({ type: 'session_updated', session: summary });
+    return { session: summary, participant: requireParticipant(session, identity.subject) };
+  }
+
   async startSession(identity: AuthenticatedIdentity, sessionId: string): Promise<SessionAccess> {
     const current = await this.repository.findById(sessionId);
     if (!current) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
@@ -217,10 +299,13 @@ export class SessionService {
     if (current.status !== 'lobby') {
       throw new SessionError('CONFLICT', 'This session has already left the lobby.', 409);
     }
-    if (current.participants.length < MIN_PLAYERS || current.participants.some((member) => !member.isReady)) {
+    if (
+      current.participants.length !== current.maxPlayers ||
+      current.participants.some((member) => !member.isReady)
+    ) {
       throw new SessionError(
         'NOT_READY',
-        'At least two players must be present and every player must be ready before the host starts.',
+        `All ${current.maxPlayers} configured player seats must be filled and every human player must be ready before the host starts.`,
         409,
       );
     }
@@ -232,7 +317,12 @@ export class SessionService {
       maxPlayers: current.maxPlayers,
       now,
     });
-    const session = await this.repository.commitStart({ sessionId, snapshot, now });
+    const session = await this.repository.commitStart({
+      sessionId,
+      snapshot,
+      expectedUpdatedAt: current.updatedAt,
+      now,
+    });
     const summary = toSummary(session);
     this.events.publish({ type: 'game_started', session: summary, snapshot });
     return { session: summary, participant: requireParticipant(session, identity.subject) };
@@ -273,7 +363,7 @@ export class SessionService {
     }
 
     const requiredPlayerIds = current.participants
-      .filter((member) => hydrated.players.get(member.playerId)?.status === 'active')
+      .filter((member) => !member.isBot && hydrated.players.get(member.playerId)?.status === 'active')
       .map((member) => member.playerId);
 
     const result = await this.repository.submitTurn({
@@ -316,11 +406,15 @@ export class SessionService {
       throw new Error(`Expected action_planning but received ${game.turnPhase}.`);
     }
 
-    game = processTurn(game, actionsByPlayer);
+    const completeActions: TurnActions = {
+      ...generateAllBotActions(game),
+      ...actionsByPlayer,
+    };
+    game = processTurn(game, completeActions);
     if (game.turnPhase !== 'action_execution') {
       throw new Error(`Expected action_execution but received ${game.turnPhase}.`);
     }
-    game = processTurn(game, actionsByPlayer);
+    game = processTurn(game, completeActions);
 
     let automaticPhaseCount = 0;
     while (game.status === 'in_progress' && game.turnPhase !== 'action_planning') {

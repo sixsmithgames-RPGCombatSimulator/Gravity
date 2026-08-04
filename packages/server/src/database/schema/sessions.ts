@@ -48,12 +48,12 @@ export const session_participants = pgTable(
       .notNull()
       .references(() => sessions.id, { onDelete: 'cascade' }),
     user_id: uuid('user_id')
-      .notNull()
       .references(() => users.id),
     player_id: uuid('player_id').notNull().defaultRandom(),
     display_name: varchar('display_name', { length: 50 }).notNull(),
     seat_number: integer('seat_number').notNull(),
     is_ready: boolean('is_ready').notNull().default(false),
+    is_bot: boolean('is_bot').notNull().default(false),
     joined_at: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

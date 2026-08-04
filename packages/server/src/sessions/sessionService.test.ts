@@ -50,7 +50,7 @@ describe('SessionService beta lobby lifecycle', () => {
 
   it('requires host authority and every participant readiness before committing version 1', async () => {
     const { service, publish } = createService();
-    const created = await service.createSession({ identity: host, maxPlayers: 4 });
+    const created = await service.createSession({ identity: host, maxPlayers: 2 });
     await service.joinSession({ identity: guest, joinCode: created.joinCode });
 
     await expect(service.startSession(guest, created.session.id)).rejects.toMatchObject({ code: 'NOT_HOST' });
@@ -70,6 +70,98 @@ describe('SessionService beta lobby lifecycle', () => {
     expect(publish).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: 'game_started', snapshot: expect.objectContaining({ stateVersion: 1 }) }),
     );
+  });
+
+  it('requires the configured roster size and lets bots fill ready seats', async () => {
+    const { service } = createService();
+    const created = await service.createSession({ identity: host, maxPlayers: 3 });
+    const joined = await service.joinSession({ identity: guest, joinCode: created.joinCode });
+
+    await service.setReady({ identity: host, sessionId: created.session.id, isReady: true });
+    await service.setReady({ identity: guest, sessionId: created.session.id, isReady: true });
+    await expect(service.startSession(host, created.session.id)).rejects.toMatchObject({ code: 'NOT_READY' });
+
+    const withBot = await service.setBotSeat({
+      identity: host,
+      sessionId: created.session.id,
+      seatNumber: 3,
+      isBot: true,
+    });
+    expect(withBot.session.participants).toHaveLength(3);
+    expect(withBot.session.participants[2]).toMatchObject({
+      displayName: 'Bot Commander 3',
+      seatNumber: 3,
+      isBot: true,
+      isReady: true,
+      userId: null,
+    });
+
+    const started = await service.startSession(host, created.session.id);
+    const hydrated = deserializeGameStateSnapshot(started.session.latestSnapshot);
+    const bot = Array.from(hydrated.game.players.values()).find((player) => player.isBot);
+    expect(bot).toMatchObject({ isBot: true, userId: null, botStrategy: 'default' });
+
+    const guestPending = await service.submitTurn({
+      identity: guest,
+      sessionId: created.session.id,
+      submissionId: '30000000-0000-4000-8000-000000000001',
+      expectedStateVersion: 1,
+      actions: [],
+    });
+    expect(guestPending).toMatchObject({ status: 'pending', submittedPlayerIds: [joined.participant.playerId] });
+
+    const committed = await service.submitTurn({
+      identity: host,
+      sessionId: created.session.id,
+      submissionId: '30000000-0000-4000-8000-000000000002',
+      expectedStateVersion: 1,
+      actions: [],
+    });
+    expect(committed).toMatchObject({ status: 'committed', stateVersion: 2 });
+  });
+
+  it('lets only the host replace non-host seats with bots and reopen them', async () => {
+    const { service } = createService();
+    const created = await service.createSession({ identity: host, maxPlayers: 2 });
+    await service.joinSession({ identity: guest, joinCode: created.joinCode });
+
+    await expect(
+      service.setBotSeat({ identity: guest, sessionId: created.session.id, seatNumber: 2, isBot: true }),
+    ).rejects.toMatchObject({ code: 'NOT_HOST' });
+
+    const replaced = await service.setBotSeat({
+      identity: host,
+      sessionId: created.session.id,
+      seatNumber: 2,
+      isBot: true,
+    });
+    expect(replaced.session.participants[1]).toMatchObject({ seatNumber: 2, isBot: true, userId: null });
+    await expect(service.getSession(guest, created.session.id)).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+
+    const reopened = await service.setBotSeat({
+      identity: host,
+      sessionId: created.session.id,
+      seatNumber: 2,
+      isBot: false,
+    });
+    expect(reopened.session.participants).toHaveLength(1);
+  });
+
+  it('lets only the host cancel a waiting game', async () => {
+    const { service, publish } = createService();
+    const created = await service.createSession({ identity: host, maxPlayers: 2 });
+    await service.joinSession({ identity: guest, joinCode: created.joinCode });
+
+    await expect(service.cancelSession(guest, created.session.id)).rejects.toMatchObject({ code: 'NOT_HOST' });
+    const canceled = await service.cancelSession(host, created.session.id);
+
+    expect(canceled.session.status).toBe('abandoned');
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'session_updated', session: expect.objectContaining({ status: 'abandoned' }) }),
+    );
+    await expect(
+      service.joinSession({ identity: stranger, joinCode: created.joinCode }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
   it('does not accept a seventh seat or a new identity after start', async () => {

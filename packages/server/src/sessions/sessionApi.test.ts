@@ -69,6 +69,48 @@ describe('session HTTP API', () => {
     expect(response.body.error).toMatchObject({ code: 'RATE_LIMITED' });
   });
 
+  it('exposes host-authorized bot roster and cancellation mutations', async () => {
+    const app = createSessionApp();
+    const created = await request(app)
+      .post('/sessions')
+      .set(bearer('host-token'))
+      .send({ displayName: 'Commander Host', maxPlayers: 3 });
+    const sessionId = created.body.session.id as string;
+
+    const forbiddenBot = await request(app)
+      .post(`/sessions/${sessionId}/bots`)
+      .set(bearer('stranger-token'))
+      .send({ seatNumber: 2, isBot: true });
+    expect(forbiddenBot.status).toBe(403);
+    expect(forbiddenBot.body.error.code).toBe('NOT_A_MEMBER');
+
+    const bot = await request(app)
+      .post(`/sessions/${sessionId}/bots`)
+      .set(bearer('host-token'))
+      .send({ seatNumber: 2, isBot: true });
+    expect(bot.status).toBe(200);
+    expect(bot.body.session.participants[1]).toMatchObject({
+      seatNumber: 2,
+      isBot: true,
+      isReady: true,
+      userId: null,
+    });
+
+    const canceled = await request(app)
+      .post(`/sessions/${sessionId}/cancel`)
+      .set(bearer('host-token'))
+      .send();
+    expect(canceled.status).toBe(200);
+    expect(canceled.body.session.status).toBe('abandoned');
+
+    const lateBot = await request(app)
+      .post(`/sessions/${sessionId}/bots`)
+      .set(bearer('host-token'))
+      .send({ seatNumber: 3, isBot: true });
+    expect(lateBot.status).toBe(409);
+    expect(lateBot.body.error.code).toBe('CONFLICT');
+  });
+
   it('completes create, join, ready, start, and authenticated resume', async () => {
     const app = createSessionApp();
     const created = await request(app)

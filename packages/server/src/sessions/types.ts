@@ -7,11 +7,12 @@ export type SessionStatus = 'lobby' | 'active' | 'ended' | 'abandoned';
 export type SessionParticipant = {
   id: string;
   sessionId: string;
-  userId: string;
+  userId: string | null;
   playerId: string;
   displayName: string;
   seatNumber: number;
   isReady: boolean;
+  isBot: boolean;
   isHost: boolean;
   joinedAt: Date;
   updatedAt: Date;
@@ -65,9 +66,21 @@ export interface SessionRepository {
     isReady: boolean;
     now: Date;
   }): Promise<SessionRecord>;
+  setBotSeat(params: {
+    sessionId: string;
+    seatNumber: number;
+    isBot: boolean;
+    displayName: string;
+    now: Date;
+  }): Promise<SessionRecord>;
+  cancelLobby(params: {
+    sessionId: string;
+    now: Date;
+  }): Promise<SessionRecord>;
   commitStart(params: {
     sessionId: string;
     snapshot: GameStateSnapshotV1;
+    expectedUpdatedAt: Date;
     now: Date;
   }): Promise<SessionRecord>;
   submitTurn(params: {

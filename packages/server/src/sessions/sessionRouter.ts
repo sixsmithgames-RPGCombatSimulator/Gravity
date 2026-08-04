@@ -134,6 +134,33 @@ export function createSessionRouter(options: {
   );
 
   router.post(
+    '/:sessionId/bots',
+    identityLimit('session-bots', { limit: 30, windowMs: 60_000 }),
+    asyncRoute(async (request, response) => {
+      const sessionId = parse(sessionIdSchema, request.params.sessionId);
+      const body = parse(
+        z.object({
+          seatNumber: z.number().int().min(2).max(6),
+          isBot: z.boolean(),
+        }),
+        request.body,
+      );
+      response.status(200).json(
+        await options.service.setBotSeat({ identity: request.identity, sessionId, ...body }),
+      );
+    }),
+  );
+
+  router.post(
+    '/:sessionId/cancel',
+    identityLimit('session-cancel', { limit: 10, windowMs: 60_000 }),
+    asyncRoute(async (request, response) => {
+      const sessionId = parse(sessionIdSchema, request.params.sessionId);
+      response.status(200).json(await options.service.cancelSession(request.identity, sessionId));
+    }),
+  );
+
+  router.post(
     '/:sessionId/start',
     identityLimit('session-start', { limit: 10, windowMs: 60_000 }),
     asyncRoute(async (request, response) => {

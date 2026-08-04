@@ -97,7 +97,8 @@ export const gravitySessionGameFactory: SessionGameFactory = {
       game = addPlayerToGame(game, {
         id: participant.playerId,
         userId: participant.userId,
-        isBot: false,
+        isBot: participant.isBot,
+        ...(participant.isBot ? { botStrategy: 'default' } : {}),
         ship: createInitialShip({ ring: 8, space: 0 }),
         crew: createCrew(participant),
         captain: createCaptain(participant),

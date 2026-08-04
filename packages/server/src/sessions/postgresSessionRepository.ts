@@ -73,25 +73,19 @@ async function loadSession(
       displayName: session_participants.display_name,
       seatNumber: session_participants.seat_number,
       isReady: session_participants.is_ready,
+      isBot: session_participants.is_bot,
       joinedAt: session_participants.joined_at,
       updatedAt: session_participants.updated_at,
     })
     .from(session_participants)
-    .innerJoin(users, eq(session_participants.user_id, users.id))
+    .leftJoin(users, eq(session_participants.user_id, users.id))
     .where(eq(session_participants.session_id, sessionRow.id))
     .orderBy(asc(session_participants.seat_number));
 
-  const participants: SessionParticipant[] = participantRows.flatMap((row) =>
-    row.userId
-      ? [
-          {
-            ...row,
-            userId: row.userId,
-            isHost: row.userId === sessionRow.createdBy,
-          },
-        ]
-      : [],
-  );
+  const participants: SessionParticipant[] = participantRows.map((row) => ({
+    ...row,
+    isHost: row.userId !== null && row.userId === sessionRow.createdBy,
+  }));
 
   const [snapshotRow] = await executor
     .select({ state: state_snapshots.state })
@@ -253,6 +247,99 @@ export class PostgresSessionRepository implements SessionRepository {
     });
   }
 
+  /**
+   * Purpose: Persist host-selected bot control for one non-host lobby seat.
+   * Parameters: Session id, seat number, desired bot state, display label, and mutation time.
+   * Returns: The reloaded authoritative session roster.
+   * Side effects: Replaces an occupant when bot control is enabled or removes the bot when disabled.
+   */
+  async setBotSeat(params: Parameters<SessionRepository['setBotSeat']>[0]): Promise<SessionRecord> {
+    return this.database.transaction(async (transaction) => {
+      const [lockedSession] = await transaction
+        .select({ status: sessions.status, maxPlayers: sessions.max_players })
+        .from(sessions)
+        .where(eq(sessions.id, params.sessionId))
+        .for('update')
+        .limit(1);
+      if (!lockedSession) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+      if (lockedSession.status !== 'lobby') {
+        throw new SessionError('CONFLICT', 'Bot seats can only change while the session is in the lobby.', 409);
+      }
+      if (params.seatNumber <= 1 || params.seatNumber > lockedSession.maxPlayers) {
+        throw new SessionError('INVALID_REQUEST', 'Only non-host seats within the configured roster can become bots.', 400);
+      }
+
+      const [existing] = await transaction
+        .select({
+          id: session_participants.id,
+          isBot: session_participants.is_bot,
+        })
+        .from(session_participants)
+        .where(
+          and(
+            eq(session_participants.session_id, params.sessionId),
+            eq(session_participants.seat_number, params.seatNumber),
+          ),
+        )
+        .limit(1);
+
+      if (params.isBot) {
+        if (existing?.isBot) {
+          await transaction
+            .update(session_participants)
+            .set({ display_name: params.displayName, is_ready: true, updated_at: params.now })
+            .where(eq(session_participants.id, existing.id));
+        } else {
+          if (existing) {
+            await transaction.delete(session_participants).where(eq(session_participants.id, existing.id));
+          }
+          await transaction.insert(session_participants).values({
+            session_id: params.sessionId,
+            user_id: null,
+            display_name: params.displayName,
+            seat_number: params.seatNumber,
+            is_ready: true,
+            is_bot: true,
+            joined_at: params.now,
+            updated_at: params.now,
+          });
+        }
+      } else if (existing?.isBot) {
+        await transaction.delete(session_participants).where(eq(session_participants.id, existing.id));
+      }
+
+      await transaction
+        .update(sessions)
+        .set({ updated_at: params.now })
+        .where(eq(sessions.id, params.sessionId));
+      const session = await loadSession(transaction, eq(sessions.id, params.sessionId));
+      if (!session) throw new SessionError('NOT_FOUND', 'Session not found after updating its bot roster.', 404);
+      return session;
+    });
+  }
+
+  /**
+   * Purpose: Atomically abandon a waiting lobby at the host's request.
+   * Parameters: Session id and cancellation time.
+   * Returns: The reloaded abandoned session.
+   * Side effects: Closes the join code by transitioning the durable session out of lobby status.
+   */
+  async cancelLobby(params: Parameters<SessionRepository['cancelLobby']>[0]): Promise<SessionRecord> {
+    return this.database.transaction(async (transaction) => {
+      const updated = await transaction
+        .update(sessions)
+        .set({ status: 'abandoned', ended_at: params.now, updated_at: params.now })
+        .where(and(eq(sessions.id, params.sessionId), eq(sessions.status, 'lobby')))
+        .returning({ id: sessions.id });
+      if (updated.length === 0) {
+        throw new SessionError('CONFLICT', 'Only a waiting lobby can be canceled.', 409);
+      }
+      const session = await loadSession(transaction, eq(sessions.id, params.sessionId));
+      if (!session) throw new SessionError('NOT_FOUND', 'Canceled session could not be reloaded.', 404);
+      return session;
+    });
+  }
+
   async commitStart(params: Parameters<SessionRepository['commitStart']>[0]): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
       const [updated] = await transaction
@@ -263,9 +350,21 @@ export class PostgresSessionRepository implements SessionRepository {
           started_at: params.now,
           updated_at: params.now,
         })
-        .where(and(eq(sessions.id, params.sessionId), eq(sessions.status, 'lobby')))
+        .where(
+          and(
+            eq(sessions.id, params.sessionId),
+            eq(sessions.status, 'lobby'),
+            eq(sessions.updated_at, params.expectedUpdatedAt),
+          ),
+        )
         .returning({ id: sessions.id });
-      if (!updated) throw new SessionError('CONFLICT', 'This session has already started.', 409);
+      if (!updated) {
+        throw new SessionError(
+          'CONFLICT',
+          'The lobby changed or started while launch was being committed. Review the roster and launch again.',
+          409,
+        );
+      }
 
       await transaction.insert(state_snapshots).values({
         session_id: params.sessionId,

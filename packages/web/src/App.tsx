@@ -77,6 +77,8 @@ function App({ identity }: { identity: IdentityAccess }) {
         isWorking={session.isWorking}
         error={session.error}
         onSetReady={session.setReady}
+        onSetBotSeat={session.setBotSeat}
+        onCancel={session.cancelSession}
         onStart={session.startSession}
       />
     );

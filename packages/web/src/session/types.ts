@@ -3,11 +3,12 @@ import type { GameStateSnapshotV1, PlayerAction } from '@gravity/core';
 export type SessionParticipant = {
   id: string;
   sessionId: string;
-  userId: string;
+  userId: string | null;
   playerId: string;
   displayName: string;
   seatNumber: number;
   isReady: boolean;
+  isBot: boolean;
   isHost: boolean;
   joinedAt: string;
   updatedAt: string;

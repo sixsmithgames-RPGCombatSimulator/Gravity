@@ -58,6 +58,15 @@ export function createSessionApi(getIdentityToken: () => Promise<string>) {
         body: JSON.stringify({ isReady }),
       });
     },
+    setBotSeat(sessionId: string, seatNumber: number, isBot: boolean): Promise<SessionAccess> {
+      return sessionRequest(`/sessions/${sessionId}/bots`, {
+        method: 'POST',
+        body: JSON.stringify({ seatNumber, isBot }),
+      });
+    },
+    cancel(sessionId: string): Promise<SessionAccess> {
+      return sessionRequest(`/sessions/${sessionId}/cancel`, { method: 'POST', body: '{}' });
+    },
     start(sessionId: string): Promise<SessionAccess> {
       return sessionRequest(`/sessions/${sessionId}/start`, { method: 'POST', body: '{}' });
     },

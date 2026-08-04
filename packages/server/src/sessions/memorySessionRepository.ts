@@ -49,6 +49,7 @@ export class MemorySessionRepository implements SessionRepository {
           displayName: params.displayName,
           seatNumber: 1,
           isReady: false,
+          isBot: false,
           isHost: true,
           joinedAt: params.now,
           updatedAt: params.now,
@@ -92,6 +93,7 @@ export class MemorySessionRepository implements SessionRepository {
       displayName: params.displayName,
       seatNumber,
       isReady: false,
+      isBot: false,
       isHost: false,
       joinedAt: params.now,
       updatedAt: params.now,
@@ -114,11 +116,80 @@ export class MemorySessionRepository implements SessionRepository {
     return cloneSession(session);
   }
 
+  /**
+   * Purpose: Make a lobby seat bot-controlled or return a bot seat to the open roster.
+   * Parameters: Session id, target seat, desired bot state, bot label, and mutation time.
+   * Returns: A cloned authoritative session after the roster mutation.
+   * Side effects: Replaces a non-host human in the selected seat when bot control is enabled.
+   */
+  async setBotSeat(params: Parameters<SessionRepository['setBotSeat']>[0]): Promise<SessionRecord> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+    if (session.status !== 'lobby') {
+      throw new SessionError('CONFLICT', 'Bot seats can only change while the session is in the lobby.', 409);
+    }
+    if (params.seatNumber <= 1 || params.seatNumber > session.maxPlayers) {
+      throw new SessionError('INVALID_REQUEST', 'Only non-host seats within the configured roster can become bots.', 400);
+    }
+
+    const existingIndex = session.participants.findIndex(
+      (participant) => participant.seatNumber === params.seatNumber,
+    );
+    const existing = existingIndex >= 0 ? session.participants[existingIndex] : null;
+    if (existing?.isHost) {
+      throw new SessionError('CONFLICT', 'The host seat cannot be replaced by a bot.', 409);
+    }
+
+    if (params.isBot) {
+      const botParticipant: SessionRecord['participants'][number] = {
+        id: existing?.isBot ? existing.id : randomUUID(),
+        sessionId: session.id,
+        userId: null,
+        playerId: existing?.isBot ? existing.playerId : randomUUID(),
+        displayName: params.displayName,
+        seatNumber: params.seatNumber,
+        isReady: true,
+        isBot: true,
+        isHost: false,
+        joinedAt: existing?.isBot ? existing.joinedAt : params.now,
+        updatedAt: params.now,
+      };
+      if (existingIndex >= 0) session.participants[existingIndex] = botParticipant;
+      else session.participants.push(botParticipant);
+    } else if (existing?.isBot) {
+      session.participants.splice(existingIndex, 1);
+    }
+
+    session.participants.sort((left, right) => left.seatNumber - right.seatNumber);
+    session.updatedAt = params.now;
+    return cloneSession(session);
+  }
+
+  /**
+   * Purpose: Mark a waiting lobby as abandoned so every connected client exits the ready room.
+   * Parameters: Session id and cancellation time.
+   * Returns: A cloned abandoned session.
+   * Side effects: Permanently closes the join code and prevents the lobby from starting.
+   */
+  async cancelLobby(params: Parameters<SessionRepository['cancelLobby']>[0]): Promise<SessionRecord> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+    if (session.status !== 'lobby') {
+      throw new SessionError('CONFLICT', 'Only a waiting lobby can be canceled.', 409);
+    }
+    session.status = 'abandoned';
+    session.updatedAt = params.now;
+    return cloneSession(session);
+  }
+
   async commitStart(params: Parameters<SessionRepository['commitStart']>[0]): Promise<SessionRecord> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
     if (session.status !== 'lobby' || session.latestSnapshot) {
       throw new SessionError('CONFLICT', 'This session has already started.', 409);
+    }
+    if (session.updatedAt.getTime() !== params.expectedUpdatedAt.getTime()) {
+      throw new SessionError('CONFLICT', 'The lobby roster changed while the game was starting. Review it and launch again.', 409);
     }
     session.status = 'active';
     session.stateVersion = params.snapshot.stateVersion;

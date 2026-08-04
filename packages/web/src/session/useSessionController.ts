@@ -38,6 +38,16 @@ function storeSessionId(sessionId: string, joinCode?: string | null): void {
   );
 }
 
+/**
+ * Purpose: Remove durable resume data when a lobby is canceled or the current player loses its seat.
+ * Parameters: None.
+ * Returns: Nothing.
+ * Side effects: Deletes the versioned session pointer from localStorage.
+ */
+function clearStoredSession(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function useSessionController(getIdentityToken: () => Promise<string>) {
   const sessionApi = useMemo(() => createSessionApi(getIdentityToken), [getIdentityToken]);
   const [access, setAccess] = useState<SessionAccess | null>(null);
@@ -52,7 +62,20 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
     actions: PlayerAction[];
   } | null>(null);
 
+  const resetSession = useCallback((message: string) => {
+    clearStoredSession();
+    pendingSubmission.current = null;
+    setAccess(null);
+    setJoinCode(null);
+    setTurnStatus(null);
+    setError(message);
+  }, []);
+
   const acceptAccess = useCallback((nextAccess: SessionAccess) => {
+    if (nextAccess.session.status === 'abandoned') {
+      resetSession('This game was canceled. You can create or join another mission.');
+      return;
+    }
     setAccess(nextAccess);
     storeSessionId(nextAccess.session.id);
     setTurnStatus(
@@ -60,7 +83,7 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
         ? 'Plan locked. Waiting for the remaining active players.'
         : null,
     );
-  }, []);
+  }, [resetSession]);
 
   useEffect(() => {
     const storedSession = readStoredSession();
@@ -100,6 +123,14 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
         socket = io(SESSION_API_ORIGIN, { auth: { token } });
         socket.on('connect', () => socket?.emit('join_session', { sessionId: access.session.id }));
         socket.on('session_updated', (session: SessionSummary) => {
+          if (session.status === 'abandoned') {
+            resetSession('The host canceled this game. You can create or join another mission.');
+            return;
+          }
+          if (!session.participants.some((member) => member.playerId === participantPlayerId)) {
+            resetSession('The host switched your player slot to a bot. You can join another mission.');
+            return;
+          }
           setTurnStatus(
             session.pendingPlayerIds.includes(participantPlayerId)
               ? 'Plan locked. Waiting for the remaining active players.'
@@ -136,7 +167,7 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
       disposed = true;
       socket?.disconnect();
     };
-  }, [access?.participant.playerId, access?.session.id, getIdentityToken]);
+  }, [access?.participant.playerId, access?.session.id, getIdentityToken, resetSession]);
 
   const run = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | null> => {
     setIsWorking(true);
@@ -190,6 +221,21 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
     if (result) acceptAccess(result);
   }, [acceptAccess, access, run, sessionApi]);
 
+  const setBotSeat = useCallback(
+    async (seatNumber: number, isBot: boolean) => {
+      if (!access) return;
+      const result = await run(() => sessionApi.setBotSeat(access.session.id, seatNumber, isBot));
+      if (result) acceptAccess(result);
+    },
+    [acceptAccess, access, run, sessionApi],
+  );
+
+  const cancelSession = useCallback(async () => {
+    if (!access) return;
+    const result = await run(() => sessionApi.cancel(access.session.id));
+    if (result) acceptAccess(result);
+  }, [acceptAccess, access, run, sessionApi]);
+
   const submitTurn = useCallback(
     async (actions: PlayerAction[]) => {
       const snapshot = access?.session.latestSnapshot;
@@ -230,7 +276,8 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
       setTurnStatus(
         `Plan locked. Waiting for ${Math.max(
           0,
-          access.session.participants.length - result.submittedPlayerIds.length,
+          access.session.participants.filter((participant) => !participant.isBot).length -
+            result.submittedPlayerIds.length,
         )} player(s).`,
       );
     },
@@ -248,6 +295,8 @@ export function useSessionController(getIdentityToken: () => Promise<string>) {
     createSession,
     joinSession,
     setReady,
+    setBotSeat,
+    cancelSession,
     startSession,
     submitTurn,
   };

@@ -83,6 +83,7 @@ test('two players can create, join, commit, resume, and survive a reconnect wave
     await guest.page.locator('#join-code').fill(joinCode!);
     await guest.page.getByRole('button', { name: 'Join private session' }).click();
     await expect(guest.page.getByRole('heading', { name: 'Crew assembly' })).toBeVisible();
+    await expect(host.page.getByTestId('configured-player-count')).toHaveText('2-player game');
     await expect(host.page.getByText('2 of 2 seats occupied')).toBeVisible();
 
     await guest.page.getByRole('button', { name: 'Ready up' }).click();
@@ -127,6 +128,63 @@ test('two players can create, join, commit, resume, and survive a reconnect wave
       body: await guest.page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
+  } finally {
+    await Promise.all([host.context.close(), guest.context.close()]);
+  }
+});
+
+test('host can fill the configured roster with a bot and complete a turn', async ({ browser }) => {
+  const host = await openPlayer(browser, 'bot-host', 'Bot Host');
+
+  try {
+    await host.page.locator('#create-display-name').fill('Bot Host');
+    await host.page.locator('#max-players').selectOption('2');
+    await host.page.getByRole('button', { name: 'Create private session' }).click();
+
+    await expect(host.page.getByTestId('configured-player-count')).toHaveText('2-player game');
+    await expect(host.page.getByText('1 of 2 seats occupied')).toBeVisible();
+    await host.page.getByRole('button', { name: 'Add bot to seat 2' }).click();
+    await expect(host.page.getByText('Seat 2: Bot Commander 2')).toBeVisible();
+    await expect(host.page.getByText('2 of 2 seats occupied')).toBeVisible();
+
+    await host.page.getByRole('button', { name: 'Ready up' }).click();
+    const launch = host.page.getByRole('button', { name: 'Launch mission' });
+    await expect(launch).toBeEnabled();
+    await launch.click();
+
+    await chooseRestoreActions(host.page);
+    await host.page.getByTestId('phase-action-button').click();
+    await expect(host.page.getByTestId('current-turn')).toHaveText('2');
+    expect(host.errors).toEqual([]);
+  } finally {
+    await host.context.close();
+  }
+});
+
+test('host cancellation closes the ready room for every player', async ({ browser }) => {
+  const host = await openPlayer(browser, 'cancel-host', 'Cancel Host');
+  const guest = await openPlayer(browser, 'cancel-guest', 'Cancel Guest');
+
+  try {
+    await host.page.locator('#create-display-name').fill('Cancel Host');
+    await host.page.locator('#max-players').selectOption('2');
+    await host.page.getByRole('button', { name: 'Create private session' }).click();
+    const joinCode = (await host.page.getByTestId('join-code').textContent())?.trim();
+
+    await guest.page.locator('#join-display-name').fill('Cancel Guest');
+    await guest.page.locator('#join-code').fill(joinCode!);
+    await guest.page.getByRole('button', { name: 'Join private session' }).click();
+    await expect(host.page.getByText('2 of 2 seats occupied')).toBeVisible();
+
+    host.page.once('dialog', (dialog) => void dialog.accept());
+    await host.page.getByRole('button', { name: 'Cancel game' }).click();
+
+    await expect(host.page.getByRole('heading', { name: 'GRAVITY' })).toBeVisible();
+    await expect(host.page.getByRole('alert')).toContainText('game was canceled');
+    await expect(guest.page.getByRole('heading', { name: 'GRAVITY' })).toBeVisible();
+    await expect(guest.page.getByRole('alert')).toContainText('host canceled this game');
+    expect(host.errors).toEqual([]);
+    expect(guest.errors).toEqual([]);
   } finally {
     await Promise.all([host.context.close(), guest.context.close()]);
   }
