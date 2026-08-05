@@ -1,7 +1,9 @@
 # Beta session vertical slice
 
-Updated: 2026-08-02  
-Status: Implemented and durable-stack certified locally; external real-identity staging remains  
+Updated: 2026-08-04
+
+Status: Implemented and durable-stack certified locally; external real-identity staging remains
+
 Depends on: `docs/multiplayer-architecture-outline.md`, `packages/core/src/serialization/GameStateWire.ts`
 
 ## Outcome
@@ -34,6 +36,8 @@ These defaults constrain the slice without closing future product options.
 - Added a loopback-only Playwright identity/server harness. Two isolated Chromium contexts now create, join, ready, launch, submit both plans, observe the authoritative turn-2 snapshot, and refresh-resume without console or page errors.
 - Added a second production-like rehearsal using PostgreSQL, password-protected Redis, shared abuse controls, and two waves of 12 authenticated reconnects.
 - Added hosted `redis://`/`rediss://` configuration, isolated staging compose, a guarded logical backup/restore rehearsal, remote smoke tooling, and the staging promotion/rollback/recovery runbook.
+- Added configured-seat visibility, host cancellation, and server-authoritative bot seat controls to the ready room.
+- Added a shared player-safe request failure contract. HTML proxy/platform responses and malformed bodies stay in developer diagnostics, while the player sees the attempted action, failed result, known cause, preserved state, and exact recovery. A second consecutive equivalent failure stops retry guidance and supplies a support code.
 
 The implementation borrows VCS's proven durable-membership/ephemeral-presence boundary and authenticated room rejoin, while adding state-version preconditions and idempotent submissions that VCS does not apply consistently.
 
@@ -88,7 +92,7 @@ Required constraints:
 | `GET /sessions/:id` | Resume lobby or active game | Session summary plus latest snapshot when active |
 | `POST /sessions/:id/turns` | Submit actions with idempotency and version precondition | Committed `GameStateSnapshotV1` plus submission result |
 
-Every mutation requires a server-verified user and session membership. Error responses use stable codes plus actionable messages: `UNAUTHENTICATED`, `NOT_A_MEMBER`, `SESSION_FULL`, `NOT_READY`, `STALE_STATE`, `DUPLICATE_SUBMISSION`, `INVALID_ACTION`, and `CONFLICT`.
+Every mutation requires a server-verified user and session membership. Error responses use stable developer codes such as `UNAUTHENTICATED`, `NOT_A_MEMBER`, `SESSION_FULL`, `NOT_READY`, `STALE_STATE`, `DUPLICATE_SUBMISSION`, `INVALID_ACTION`, and `CONFLICT`. The browser maps these codes to player-safe recovery copy and never displays or parses an HTML platform response as JSON.
 
 ## Socket contract
 

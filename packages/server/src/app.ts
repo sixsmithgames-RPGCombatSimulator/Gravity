@@ -91,6 +91,16 @@ export function createApp(options: CreateAppOptions): Express {
     app.use('/sessions', createSessionRouter(options.sessions));
   }
 
+  // Express otherwise returns an HTML document for an unknown route, which caused the browser to expose a JSON parser exception.
+  app.use((_request, response) => {
+    response.status(404).json({
+      error: {
+        code: 'API_ROUTE_NOT_FOUND',
+        message: 'No API route matches this request.',
+      },
+    });
+  });
+
   app.use((_error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     response.status(500).json({
       error: {

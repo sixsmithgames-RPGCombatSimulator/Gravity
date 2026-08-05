@@ -35,7 +35,10 @@ export type SessionAccess = {
 
 export type CreatedSessionAccess = SessionAccess & { joinCode: string };
 
-export type SessionApiError = Error & { code: string; status: number };
+export type SessionUiError = {
+  message: string;
+  supportCode: string | null;
+};
 
 export type TurnSubmissionResult = {
   status: 'pending' | 'committed' | 'duplicate';

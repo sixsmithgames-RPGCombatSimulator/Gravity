@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react';
+import type { SessionUiError } from '../../session/types';
+import { SessionErrorNotice } from './SessionErrorNotice';
 
 type SessionHomeProps = {
   initialDisplayName: string;
   isWorking: boolean;
-  error: string | null;
+  error: SessionUiError | null;
   onCreate: (displayName: string, maxPlayers: number) => Promise<void>;
   onJoin: (displayName: string, joinCode: string) => Promise<void>;
 };
@@ -40,11 +42,7 @@ export function SessionHome({ initialDisplayName, isWorking, error, onCreate, on
           </p>
         </header>
 
-        {error ? (
-          <div role="alert" className="mb-6 rounded-lg border border-rose-400/40 bg-rose-950/50 px-4 py-3 text-sm text-rose-100">
-            {error}
-          </div>
-        ) : null}
+        <SessionErrorNotice error={error} className="mb-6" />
 
         <div className="grid gap-5 md:grid-cols-2">
           <form onSubmit={submitCreate} className="rounded-xl border border-white/10 bg-slate-950/45 p-5">

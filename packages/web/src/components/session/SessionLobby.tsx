@@ -1,10 +1,11 @@
-import type { SessionAccess, SessionParticipant } from '../../session/types';
+import type { SessionAccess, SessionParticipant, SessionUiError } from '../../session/types';
+import { SessionErrorNotice } from './SessionErrorNotice';
 
 type SessionLobbyProps = {
   access: SessionAccess;
   joinCode: string | null;
   isWorking: boolean;
-  error: string | null;
+  error: SessionUiError | null;
   onSetReady: (isReady: boolean) => Promise<void>;
   onSetBotSeat: (seatNumber: number, isBot: boolean) => Promise<void>;
   onCancel: () => Promise<void>;
@@ -107,11 +108,7 @@ export function SessionLobby({
           </div>
         </dl>
 
-        {error ? (
-          <div role="alert" className="mt-5 rounded-lg border border-rose-400/40 bg-rose-950/50 px-4 py-3 text-sm text-rose-100">
-            {error}
-          </div>
-        ) : null}
+        <SessionErrorNotice error={error} className="mt-5" />
 
         <ul className="mt-6 space-y-3" aria-label="Session player slots">
           {seats.map(({ seatNumber, member }) => (

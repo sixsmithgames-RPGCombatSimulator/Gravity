@@ -75,3 +75,19 @@ describe('CORS', () => {
     },
   );
 });
+
+describe('unknown API routes', () => {
+  it('returns a structured JSON error instead of the Express HTML error page', async () => {
+    const response = await request(createHealthyApp()).post('/sessions/example/bots');
+
+    expect(response.status).toBe(404);
+    expect(response.type).toBe('application/json');
+    expect(response.body).toEqual({
+      error: {
+        code: 'API_ROUTE_NOT_FOUND',
+        message: 'No API route matches this request.',
+      },
+    });
+    expect(response.text).not.toContain('<!DOCTYPE');
+  });
+});

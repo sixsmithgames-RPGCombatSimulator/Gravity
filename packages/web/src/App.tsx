@@ -11,6 +11,7 @@ import { ShipDashboard } from './components/ship/ShipDashboard';
 import { Header } from './components/layout/Header';
 import { SessionHome } from './components/session/SessionHome';
 import { SessionLobby } from './components/session/SessionLobby';
+import { SessionErrorNotice } from './components/session/SessionErrorNotice';
 import { useSessionController } from './session/useSessionController';
 import type { IdentityAccess } from './session/auth';
 
@@ -118,6 +119,8 @@ function App({ identity }: { identity: IdentityAccess }) {
           {session.turnStatus}
         </div>
       ) : null}
+
+      <SessionErrorNotice error={session.error} className="relative z-20 mx-4 mt-3" />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">

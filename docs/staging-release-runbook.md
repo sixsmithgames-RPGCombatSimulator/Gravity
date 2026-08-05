@@ -1,6 +1,7 @@
 # Gravity staging release runbook
 
-Updated: 2026-08-02  
+Updated: 2026-08-04
+
 Status: Repository-side rehearsal passes; external project linkage and managed services remain operator actions
 
 ## Purpose
@@ -91,8 +92,8 @@ The committed journey creates two identities, creates/joins/readies/starts a pri
    ```
 
 2. Build and push the API image using the exact tested commit. Record both Git SHA and image digest.
-3. Run `npm run db:migrate --workspace=@gravity/server` as a one-off release job against staging before routing traffic. Migrations must be backward-compatible with the currently deployed API.
-4. Deploy the API image at one replica and wait for `/health/ready` to report PostgreSQL and Redis as `ok`.
+3. Run `npm run db:migrate --workspace=@gravity/server` as a one-off release job against staging before routing traffic. Migrations must be backward-compatible with the currently deployed API. The committed Railway container also runs the same migration command before the server starts, so a missed one-off migration fails the API release instead of starting incompatible code.
+4. Deploy the API image at one replica and wait for `/health/ready` to report PostgreSQL and Redis as `ok`. Confirm every new API capability is live before deploying a web control that calls it; an HTML 404 from the platform is a failed rollout even when readiness is green.
 5. Build the web artifact with preview environment values, deploy it without rebuilding, and record its URL:
 
    ```powershell

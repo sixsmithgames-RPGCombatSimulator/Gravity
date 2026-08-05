@@ -1,5 +1,67 @@
 # Coding Standards - Gravity Rules
 
+## User-facing errors
+
+Every player-visible error or recovery message is part of Gravity, not a
+developer diagnostic. It must answer these questions in this order:
+
+1. **What was Gravity trying to do?** Name the concrete player action and the
+   guarded write or check, such as adding a bot, joining a lobby, locking a plan,
+   launching a mission, or restoring a session.
+2. **What failed?** State the stopped result in plain player language.
+3. **Why did it fail?** Give the known cause in player language. If no safe
+   cause is available, say the game service did not return a usable reason;
+   never guess.
+4. **What changed?** Say whether the roster, readiness, planned actions, turn,
+   or saved game state was applied, preserved, or rolled back.
+5. **What can the player do?** Give one concrete next action and name the
+   matching control when one exists.
+
+The primary message must not expose exception strings, stack traces, HTTP
+status, JSON/schema terminology, internal service or route names, database
+language, platform proxy pages, or raw error codes. Store those details in the
+diagnostic log. A short support code may be shown afterward as visually
+secondary text.
+
+### Consecutive-failure support boundary
+
+A repeated failure signature is the same normalized root error in the same
+workflow and stage. Count only consecutive occurrences. A success, different
+error, or different workflow/stage resets the sequence. Rendering the same
+stored message again does not increment it.
+
+When the player follows the offered correction or retry and the same failure
+appears a second time in a row:
+
+- stop automated retry or repair for that chain;
+- preserve or roll back lobby and game state safely;
+- do not ask for the same correction a third time; and
+- show a simple player-voice apology and support path.
+
+Use this pattern, adapted only to the attempted action and safe state:
+
+> Sorry—Gravity hit the same snag twice while trying that. Nothing was applied,
+> and your last completed lobby or turn state is safe. Please email
+> info@sixsmithgames.com and include the support code below so we can get your
+> game moving again.
+
+The email address and support code must be copyable. A safe fresh start may be
+offered when available, but it does not replace the support instruction.
+
+### Review and test requirements
+
+Any task that creates or changes a player-visible failure path must test:
+
+- attempted action, failure, reason, safe-state result, and next action;
+- plain player language with diagnostics excluded from primary copy;
+- the first failure's normal recovery;
+- support escalation on the second consecutive occurrence;
+- reset after success or a different failure; and
+- `info@sixsmithgames.com` plus a secondary support code at escalation.
+
+Review nearby failure paths touched by the change. Do not leave a shared API
+formatter or recovery component with a mix of compliant and noncompliant copy.
+
 ## 1. Error Handling - No Fallbacks Policy
 **RULE**: Never use fallback values, default assumptions, or silent failure handling. Instead throw errors with clear messages and root causes. Provide actionable steps for the user to fix the issue.
 
