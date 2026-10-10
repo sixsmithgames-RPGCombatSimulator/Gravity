@@ -1,4 +1,6 @@
 import { useGameStore } from '../../store/gameStore';
+import { memo } from 'react';
+import { shallow } from 'zustand/shallow';
 import { ActionBar } from '../actions/ActionBar';
 
 /**
@@ -12,7 +14,8 @@ import { ActionBar } from '../actions/ActionBar';
  * - Active player indicator
  * - Settings button
  */
-export function Header() {
+/** Presentation controls subscribe only to their inputs; board movement cannot rebuild the command header. */
+export const Header = memo(function Header() {
   const {
     game,
     toggleRoster,
@@ -23,7 +26,19 @@ export function Header() {
     setDifficulty,
     botPlayerEnabled,
     setBotPlayerEnabled,
-  } = useGameStore();
+    networkSessionId,
+  } = useGameStore((state) => ({
+    game: state.game,
+    toggleRoster: state.toggleRoster,
+    toggleSettings: state.toggleSettings,
+    toggleHelp: state.toggleHelp,
+    newGame: state.newGame,
+    difficulty: state.difficulty,
+    setDifficulty: state.setDifficulty,
+    botPlayerEnabled: state.botPlayerEnabled,
+    setBotPlayerEnabled: state.setBotPlayerEnabled,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
 
   if (!game) {
     return null;
@@ -51,7 +66,8 @@ export function Header() {
   const statusDotColor = game.status === 'in_progress' ? 'bg-emerald-400' : 'bg-amber-400';
 
   return (
-    <header className="relative bg-slate-950/60 backdrop-blur-sm border-b border-gravity-border/20">
+    // Explicit pointer inheritance contains modal invalidation; no full-header blur means focus changes avoid repainting the scene behind it.
+    <header className="pointer-events-auto relative bg-slate-950/60 border-b border-gravity-border/20" data-testid="game-header">
       {/* Bottom border glow */}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
 
@@ -97,7 +113,7 @@ export function Header() {
 
         {/* Controls */}
         <div className="w-full xl:w-auto xl:ml-auto flex flex-wrap items-center gap-1.5">
-          <label className="text-[10px] uppercase tracking-widest text-gravity-muted flex items-center gap-1.5 mr-1">
+          {networkSessionId === null && <><label className="text-[10px] uppercase tracking-widest text-gravity-muted flex items-center gap-1.5 mr-1">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-50" aria-hidden="true">
               <path d="M12 2L2 7l10 5 10-5-10-5z" />
               <path d="M2 17l10 5 10-5" />
@@ -134,11 +150,12 @@ export function Header() {
           >
             New Game
           </button>
+          </>}
           <button
             type="button"
             onClick={toggleRoster}
             className="px-3 py-1.5 rounded-md border border-gravity-border/50 text-xs text-gravity-muted hover:text-slate-100 hover:border-blue-500/40 hover:bg-blue-500/10 transition-all duration-200"
-            title="Edit captain and officers"
+            title={networkSessionId !== null ? 'Inspect your mission crew' : 'Edit captain and officers'}
           >
             Roster
           </button>
@@ -155,7 +172,7 @@ export function Header() {
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
           </button>
-          {import.meta.env.DEV && (
+          {import.meta.env.DEV && networkSessionId === null && (
             <button
               type="button"
               onClick={toggleSettings}
@@ -174,4 +191,4 @@ export function Header() {
       <ActionBar />
     </header>
   );
-}
+});

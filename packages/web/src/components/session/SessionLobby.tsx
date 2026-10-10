@@ -5,11 +5,13 @@ type SessionLobbyProps = {
   access: SessionAccess;
   joinCode: string | null;
   isWorking: boolean;
+  isRefreshRequired: boolean;
   error: SessionUiError | null;
   onSetReady: (isReady: boolean) => Promise<void>;
   onSetBotSeat: (seatNumber: number, isBot: boolean) => Promise<void>;
   onCancel: () => Promise<void>;
   onStart: () => Promise<void>;
+  onRefresh: () => Promise<void>;
 };
 
 type LobbySeat = {
@@ -55,11 +57,13 @@ export function SessionLobby({
   access,
   joinCode,
   isWorking,
+  isRefreshRequired,
   error,
   onSetReady,
   onSetBotSeat,
   onCancel,
   onStart,
+  onRefresh,
 }: SessionLobbyProps) {
   const { participant, session } = access;
   const seats = createLobbySeats(session.maxPlayers, session.participants);
@@ -109,6 +113,12 @@ export function SessionLobby({
         </dl>
 
         <SessionErrorNotice error={error} className="mt-5" />
+        {!error?.supportCode ? (
+          <button type="button" disabled={isWorking} onClick={() => void onRefresh()}
+            className="mt-4 rounded-md border border-slate-500/50 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+            Refresh lobby
+          </button>
+        ) : null}
 
         <ul className="mt-6 space-y-3" aria-label="Session player slots">
           {seats.map(({ seatNumber, member }) => (
@@ -146,7 +156,7 @@ export function SessionLobby({
                     <button
                       type="button"
                       aria-label={`Open seat ${seatNumber}`}
-                      disabled={isWorking}
+                      disabled={isWorking || isRefreshRequired}
                       onClick={() => void onSetBotSeat(seatNumber, false)}
                       className="rounded-md border border-slate-500/50 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -156,7 +166,7 @@ export function SessionLobby({
                     <button
                       type="button"
                       aria-label={member ? `Replace ${member.displayName} with bot` : `Add bot to seat ${seatNumber}`}
-                      disabled={isWorking}
+                      disabled={isWorking || isRefreshRequired}
                       onClick={() => {
                         if (member && !confirmBotReplacement(member.displayName)) return;
                         void onSetBotSeat(seatNumber, true);
@@ -175,7 +185,7 @@ export function SessionLobby({
         <div className={`mt-7 grid gap-3 ${participant.isHost ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
           <button
             type="button"
-            disabled={isWorking}
+            disabled={isWorking || isRefreshRequired}
             onClick={() => void onSetReady(!participant.isReady)}
             className="rounded-lg border border-cyan-300/40 bg-cyan-950/35 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-900/45 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -185,7 +195,7 @@ export function SessionLobby({
             <>
               <button
                 type="button"
-                disabled={isWorking || !allReady}
+                disabled={isWorking || isRefreshRequired || !allReady}
                 onClick={() => void onStart()}
                 className="rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-3 font-display font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -197,7 +207,7 @@ export function SessionLobby({
               </button>
               <button
                 type="button"
-                disabled={isWorking}
+                disabled={isWorking || isRefreshRequired}
                 onClick={() => {
                   if (confirmCancellation()) void onCancel();
                 }}

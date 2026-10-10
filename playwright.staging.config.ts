@@ -7,11 +7,12 @@ const redisUrl = process.env.STAGING_REDIS_URL || 'redis://:gravity_staging_redi
 
 export default defineConfig({
   testDir: './e2e',
+  testMatch: 'multiplayer-session.spec.ts',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: 'list',
+  reporter: [['list'], ['html', { open: 'never' }]],
   timeout: 60_000,
   expect: { timeout: 15_000 },
   use: {

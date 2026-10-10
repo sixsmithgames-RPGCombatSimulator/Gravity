@@ -1,9 +1,16 @@
 import { useGameStore } from '../../store/gameStore';
+import { memo } from 'react';
+import { shallow } from 'zustand/shallow';
 
-export function EventOverlay() {
-  const { game, ui, setEventOverlayVisible } = useGameStore();
+/** Keep board camera updates out of event-dialog rendering. */
+export const EventOverlay = memo(function EventOverlay() {
+  const { game, eventOverlayVisible, setEventOverlayVisible } = useGameStore((state) => ({
+    game: state.game,
+    eventOverlayVisible: state.ui.eventOverlayVisible,
+    setEventOverlayVisible: state.setEventOverlayVisible,
+  }), shallow);
 
-  if (!game || !ui.eventOverlayVisible || !game.lastResolvedEvent) {
+  if (!game || !eventOverlayVisible || !game.lastResolvedEvent) {
     return null;
   }
 
@@ -41,4 +48,4 @@ export function EventOverlay() {
       </div>
     </div>
   );
-}
+});

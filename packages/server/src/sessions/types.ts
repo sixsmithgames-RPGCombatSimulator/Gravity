@@ -90,6 +90,8 @@ export interface SessionRepository {
     expectedStateVersion: number;
     actions: PlayerAction[];
     requiredPlayerIds: string[];
+    /** Validate one whole proposed plan against the current snapshot inside the session lock, before writing it. */
+    validate: (snapshot: GameStateSnapshotV1, playerId: string, actions: PlayerAction[]) => void;
     process: (snapshot: GameStateSnapshotV1, actions: TurnActions) => GameStateSnapshotV1;
     now: Date;
   }): Promise<TurnSubmissionResult>;

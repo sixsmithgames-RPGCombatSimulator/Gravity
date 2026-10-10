@@ -1,5 +1,10 @@
 # Gravity Product Gap Analysis
 
+Historical assessment: the evidence and deployment assumptions below describe
+August, not current certification. See the living [October game quality plan
+and gap register](first-class-game-quality-plan.md) for current implementation,
+visual/performance evidence, remaining work and the next delivery tranche.
+
 **Assessment date:** 2026-08-02  
 **Evaluated state:** Current workspace, including uncommitted changes  
 **Target standard:** A trustworthy, polished, commercially supportable asynchronous multiplayer game  

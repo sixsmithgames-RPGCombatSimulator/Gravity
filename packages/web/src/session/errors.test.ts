@@ -4,9 +4,13 @@ import {
   GRAVITY_SUPPORT_EMAIL,
   SessionFailureTracker,
   SessionRequestError,
+  createClientSessionError,
   parseSessionResponse,
+  toSessionUiError,
   type SessionRequestContext,
 } from './errors';
+import { SESSION_REQUEST_CONTEXTS, botSeatRequestContext, readyRequestContext } from './requestContexts';
+import { validateSessionAccessResponse } from './responseValidation';
 
 const BOT_CONTEXT: SessionRequestContext = {
   workflow: 'configure-bot-seat',
@@ -51,6 +55,90 @@ function createHtmlNotFoundResponse(): Response {
 }
 
 describe('session response errors', () => {
+  it.each([SESSION_REQUEST_CONTEXTS.cancel, SESSION_REQUEST_CONTEXTS.start, readyRequestContext(true), botSeatRequestContext(2, true)])(
+    'requires a current authoritative lobby read after an unknown mutation outcome', (context) => {
+      const error = createClientSessionError(context, 'NETWORK_UNAVAILABLE', new Error('private send failure'), new SessionFailureTracker());
+      expect(error.playerError.message).toContain('could not confirm whether');
+      expect(error.playerError.message).toContain('last confirmed');
+      expect(error.playerError.message).toContain('Choose Refresh lobby');
+      expect(error.playerError.message).not.toMatch(/unchanged|not added|did not start|not canceled|No player slots changed|private send/);
+    },
+  );
+
+  it('stops uncertain non-idempotent creation immediately with a support code', () => {
+    const error = createClientSessionError(SESSION_REQUEST_CONTEXTS.create, 'NETWORK_UNAVAILABLE', new Error('lost creation reply'), new SessionFailureTracker());
+    expect(error.playerError.message).toContain('could not confirm whether the private game was created');
+    expect(error.playerError.message).toContain('do not create another game yet');
+    expect(error.playerError.message).toContain(GRAVITY_SUPPORT_EMAIL);
+    expect(error.playerError.supportCode).toMatch(/^GRV-[A-F0-9]{8}$/);
+    expect(error.playerError.message).not.toMatch(/not created|No lobby|Create private session again|lost creation/);
+  });
+
+  it('does not reset repeated-failure tracking for valid JSON with an unusable access envelope', async () => {
+    const tracker = new SessionFailureTracker();
+    const attempt = () => parseSessionResponse(new Response('{}', { status: 200 }),
+      SESSION_REQUEST_CONTEXTS.start, tracker, false, validateSessionAccessResponse);
+    await expect(attempt()).rejects.toMatchObject({ occurrence: 1, code: 'INVALID_RESPONSE', isUnconfirmed: true });
+    await expect(attempt()).rejects.toMatchObject({ occurrence: 2, playerError: { message: expect.stringContaining(GRAVITY_SUPPORT_EMAIL) } });
+  });
+
+  it('keeps the failed mutation sequence through a successful corrective read', async () => {
+    const tracker = new SessionFailureTracker();
+    createClientSessionError(SESSION_REQUEST_CONTEXTS.start, 'NETWORK_UNAVAILABLE', new Error('lost launch reply'), tracker);
+    await parseSessionResponse(new Response('{"ok":true}', { status: 200 }), SESSION_REQUEST_CONTEXTS.refresh, tracker, true);
+    const second = createClientSessionError(SESSION_REQUEST_CONTEXTS.start, 'NETWORK_UNAVAILABLE', new Error('lost launch reply'), tracker);
+    expect(second.occurrence).toBe(2);
+    expect(second.playerError.message).not.toContain('Choose Refresh lobby');
+  });
+
+  it('does not claim an uncertain plan was rejected and offers a draft-preserving retry', () => {
+    const error = createClientSessionError(SESSION_REQUEST_CONTEXTS.submit, 'NETWORK_UNAVAILABLE',
+      new Error('private fetch transport failure'), new SessionFailureTracker());
+    expect(error.playerError.message).toContain('trying to lock your plan for this turn');
+    expect(error.playerError.message).toContain('could not confirm whether your original plan was locked');
+    expect(error.playerError.message).toContain('last completed turn is safe');
+    expect(error.playerError.message).toContain('Keep this screen open');
+    expect(error.playerError.message).toContain('choose Lock Plans again to check your original plan');
+    expect(error.playerError.message).not.toMatch(/not committed|not locked|Reload|private fetch|transport|JSON/);
+  });
+
+  it.each([
+    new Response('<!DOCTYPE html><html>proxy private details</html>', { status: 503 }),
+    new Response('<!DOCTYPE html><html>unusable success</html>', { status: 200 }),
+  ])('treats an unavailable or unusable turn reply as an unknown write outcome', async (response) => {
+    const error = await captureRequestError(response, new SessionFailureTracker(), SESSION_REQUEST_CONTEXTS.submit);
+    expect(error.playerError.message).toContain('could not confirm whether your original plan was locked');
+    expect(error.playerError.message).not.toMatch(/not committed|not locked|Reload|DOCTYPE|503|proxy/);
+  });
+
+  it('truthfully identifies a confirmed invalid-plan rejection and a pre-send identity failure', async () => {
+    const rejection = await captureRequestError(new Response(JSON.stringify({ error: { code: 'INVALID_ACTION' } }),
+      { status: 400 }), new SessionFailureTracker(), SESSION_REQUEST_CONTEXTS.submit);
+    expect(rejection.playerError.message).toContain('Your plan was not locked.');
+    expect(rejection.playerError.message).toContain('Review your planned actions');
+    const identity = createClientSessionError(SESSION_REQUEST_CONTEXTS.submit, 'IDENTITY_UNAVAILABLE',
+      new Error('private credential details'), new SessionFailureTracker());
+    expect(identity.playerError.message).toContain('Your plan was not locked.');
+    expect(identity.playerError.message).not.toContain('could not confirm whether');
+  });
+
+  it('tracks raw failures without double counting structured failures and resets on success', () => {
+    const tracker = new SessionFailureTracker();
+    const first = toSessionUiError(new Error('raw internal exception'), SESSION_REQUEST_CONTEXTS.submit, tracker);
+    expect(first.supportCode).toBeNull();
+    const second = toSessionUiError(new Error('different raw diagnostic, same normalized failure'), SESSION_REQUEST_CONTEXTS.submit, tracker);
+    expect(second.message).toContain('same snag twice');
+    expect(second.message).toContain('could not confirm whether your original plan was locked');
+    expect(second.message).toContain(GRAVITY_SUPPORT_EMAIL);
+    expect(second.message).not.toMatch(/raw internal|not committed|not locked|Reload|choose Lock Plans again/);
+    expect(second.supportCode).toMatch(/^GRV-[A-F0-9]{8}$/);
+    tracker.recordSuccess();
+    const structured = createClientSessionError(SESSION_REQUEST_CONTEXTS.submit, 'NETWORK_UNAVAILABLE', new Error('lost reply'), tracker);
+    expect(toSessionUiError(structured, SESSION_REQUEST_CONTEXTS.submit, tracker)).toBe(structured.playerError);
+    expect(structured.occurrence).toBe(1);
+    expect(createClientSessionError(SESSION_REQUEST_CONTEXTS.submit, 'NETWORK_UNAVAILABLE', new Error('lost reply'), tracker).occurrence).toBe(2);
+  });
+
   it('turns an HTML route failure into complete player recovery copy without exposing diagnostics', async () => {
     const error = await captureRequestError(createHtmlNotFoundResponse(), new SessionFailureTracker());
 

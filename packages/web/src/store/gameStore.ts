@@ -1,6 +1,8 @@
-import { create } from 'zustand';
+import type { StoreApi } from 'zustand';
+import { createWithEqualityFn } from 'zustand/traditional';
 import {
   ConsoleBotLogger,
+  deserializeGameStateSnapshot,
   processTurn,
   generateAllBotActions as generateAllBotActionsFromEngine,
   calculateLifeSupportBreakdown,
@@ -15,6 +17,7 @@ import type {
   BotLogLevel,
   EngineInstrumentationOptions,
   GameState,
+  GameStateSnapshotV1,
   PlayerActionResolutionRecord,
   PlayerAction,
   PlayerState,
@@ -27,11 +30,15 @@ import type {
   Captain,
 } from '@gravity/core';
 import { createMockGame, type Difficulty } from '../utils/mockGame';
+import { SessionFailureTracker, SessionRequestError, createSessionRequestError } from '../session/errors';
+import { SESSION_REQUEST_CONTEXTS } from '../session/requestContexts';
 
 // Opponent bots participate by default so a new local game is immediately playable.
 const BOT_EXECUTION_ENABLED_DEFAULT = true;
 const BOT_LOG_LEVEL: BotLogLevel = import.meta.env.DEV ? 'verbose' : 'off';
 const BOT_CONSOLE_LOGGER = new ConsoleBotLogger();
+const NETWORK_GUARD_FAILURES = new SessionFailureTracker();
+let networkBindingGeneration = 0;
 
 function getBotInstrumentationOptions(): EngineInstrumentationOptions | undefined {
   if (BOT_LOG_LEVEL === 'off') {
@@ -175,6 +182,8 @@ interface UIState {
   executionConfirmed: boolean;
   /** Last user-visible error message from turn execution / validation */
   lastError: string | null;
+  /** Secondary copyable support code; diagnostics never enter the primary message. */
+  lastErrorSupportCode: string | null;
   /** Zoom level for board view (1 = 100%) */
   boardZoom: number;
   /** Board pan offset */
@@ -369,7 +378,12 @@ export interface GravityStore {
   botPlayerEnabled: boolean;
   /** Server submitter installed for authenticated network sessions. */
   networkTurnSubmitter: ((actions: PlayerAction[]) => Promise<void>) | null;
+  /** Explicit authority binding; callback cleanup never makes a shared mission local. */
+  networkSessionId: string | null;
+  /** Last hydrated version within networkSessionId, rather than a global version. */
+  networkStateVersion: number;
   isNetworkSubmitting: boolean;
+  isNetworkSubmissionBlocked: boolean;
 
   // === UI State ===
   ui: UIState;
@@ -384,6 +398,13 @@ export interface GravityStore {
   /** Enable/disable bot control for the local player */
   setBotPlayerEnabled: (enabled: boolean) => void;
   setNetworkTurnSubmitter: (submitter: GravityStore['networkTurnSubmitter']) => void;
+  setNetworkSubmissionBlocked: (blocked: boolean) => void;
+  /** Bind an authenticated participant before any network controls are rendered. */
+  bindNetworkSession: (sessionId: string, playerId: string) => void;
+  /** Atomically apply a strictly newer snapshot and discard only the previous turn's draft. */
+  hydrateNetworkSnapshot: (sessionId: string, playerId: string, snapshot: GameStateSnapshotV1) => boolean;
+  /** Leave this device's binding without changing or deleting the durable mission. */
+  leaveNetworkSession: () => void;
   /** Update game state after turn processing */
   updateGameState: (game: GameState) => void;
   /** Start a brand new game using engine-driven mock setup */
@@ -503,6 +524,7 @@ const initialUIState: UIState = {
   selectedActionSlot: 'primary',
   executionConfirmed: false,
   lastError: null,
+  lastErrorSupportCode: null,
   boardZoom: 1,
   boardOffset: { x: 0, y: 0 },
   isAnimating: false,
@@ -518,6 +540,38 @@ const initialUIState: UIState = {
 };
 
 /**
+ * Purpose: Reject a local-only mutation while the device is bound to a shared mission.
+ * Parameters: Current store, state writer, attempted player action and stable stage.
+ * Returns: Whether the mutation was blocked; the caller must leave game state unchanged.
+ * Side effects: Records bounded player recovery and developer-only diagnostics.
+ */
+function rejectNetworkMutation(
+  state: GravityStore,
+  write: StoreApi<GravityStore>['setState'],
+  attemptedAction: string,
+  stage: string,
+  submissionUnavailable = false,
+): boolean {
+  if (!state.networkSessionId) return false;
+  const failure = createSessionRequestError({
+    workflow: 'network-mission-control', stage, attemptedAction,
+    failedResult: 'That change was not applied.',
+    safeState: 'Your last completed turn and the current shared mission are safe.',
+    nextAction: submissionUnavailable
+      ? 'Keep this screen open, wait a moment for live game updates, then choose Lock Plans again.'
+      : 'Close this panel and continue planning with your confirmed crew.',
+  }, {
+    code: submissionUnavailable ? 'NETWORK_UNAVAILABLE' : 'NETWORK_CONTROL_UNAVAILABLE',
+    status: 0, diagnostic: `Blocked local durable mutation ${stage} in bound session ${state.networkSessionId}.`,
+  }, NETWORK_GUARD_FAILURES);
+  console.error('Gravity blocked a local shared-mission change', { stage, diagnostic: failure.diagnostic });
+  write({ ui: { ...state.ui, lastError: failure.playerError.message,
+    lastErrorSupportCode: failure.playerError.supportCode, executionConfirmed: false },
+    ...(submissionUnavailable && failure.occurrence >= 2 ? { isNetworkSubmissionBlocked: true } : {}) });
+  return true;
+}
+
+/**
  * Gravity game store
  * Purpose: Central state management for game and UI state
  *
@@ -527,41 +581,106 @@ const initialUIState: UIState = {
  * - Planned actions stored separately until submitted
  * - Derived state computed via helper methods
  */
-export const useGameStore = create<GravityStore>((set, get) => ({
+export const useGameStore = createWithEqualityFn<GravityStore>((set, get) => ({
   // === Initial State ===
   game: null,
   currentPlayerId: null,
   difficulty: 'hard',
   botPlayerEnabled: BOT_EXECUTION_ENABLED_DEFAULT,
   networkTurnSubmitter: null,
+  networkSessionId: null,
+  networkStateVersion: -1,
   isNetworkSubmitting: false,
+  isNetworkSubmissionBlocked: false,
   ui: initialUIState,
 
   // === Game Actions ===
-  setGame: (game) => set((state) => ({
+  setGame: (game) => {
+    if (rejectNetworkMutation(get(), set, 'replace this mission', 'replace-game')) return;
+    set((state) => ({
     game,
     ui: {
       ...state.ui,
       lastPlayerDiff: null,
     },
-  })),
+    }));
+  },
 
-  setCurrentPlayer: (playerId) => set({ currentPlayerId: playerId }),
+  setCurrentPlayer: (playerId) => {
+    if (get().currentPlayerId !== playerId && rejectNetworkMutation(get(), set, 'switch your player seat', 'switch-player')) return;
+    set({ currentPlayerId: playerId });
+  },
   setNetworkTurnSubmitter: (submitter) => set({ networkTurnSubmitter: submitter }),
+  setNetworkSubmissionBlocked: (blocked) => set({ isNetworkSubmissionBlocked: blocked }),
 
-  setDifficulty: (difficulty) => set({ difficulty }),
+  bindNetworkSession: (sessionId, playerId) => {
+    const current = get();
+    if (current.networkSessionId === sessionId && current.currentPlayerId === playerId) return;
+    networkBindingGeneration += 1;
+    NETWORK_GUARD_FAILURES.recordSuccess();
+    set({ networkSessionId: sessionId, networkStateVersion: -1, currentPlayerId: playerId,
+      game: null, ui: initialUIState, networkTurnSubmitter: null, isNetworkSubmitting: false, isNetworkSubmissionBlocked: false });
+  },
 
-  setBotPlayerEnabled: (enabled) => set({ botPlayerEnabled: enabled }),
+  hydrateNetworkSnapshot: (sessionId, playerId, snapshot) => {
+    const current = get();
+    if (current.networkSessionId !== sessionId || current.currentPlayerId !== playerId ||
+      snapshot.game.id !== sessionId || snapshot.stateVersion <= current.networkStateVersion) return false;
+    // Deserialize before the single write so observers never see a new version with
+    // the previous player's game or a draft belonging to the previous turn.
+    let hydrated: GameState;
+    try {
+      hydrated = deserializeGameStateSnapshot(snapshot).game;
+      if (!hydrated.players.has(playerId)) throw new Error('Authoritative snapshot does not contain the bound participant.');
+    } catch (cause) {
+      const failure = createSessionRequestError({
+        workflow: 'restore-mission', stage: 'hydrate-turn', attemptedAction: 'restore your latest completed turn',
+        failedResult: 'The updated turn could not be displayed.',
+        safeState: 'Your last completed turn and the plan on this device were not changed.',
+        nextAction: 'Reload Gravity once to restore your mission, then plan your actions again; reloading clears the plan on this device.',
+      }, { code: 'INVALID_RESPONSE', status: 0, diagnostic: cause instanceof Error ? cause.message : String(cause) }, NETWORK_GUARD_FAILURES);
+      console.error('Gravity rejected an unusable shared-mission snapshot', { diagnostic: failure.diagnostic });
+      set({ ui: { ...current.ui, lastError: failure.playerError.message, lastErrorSupportCode: failure.playerError.supportCode } });
+      return false;
+    }
+    NETWORK_GUARD_FAILURES.recordSuccess();
+    set({ game: hydrated, currentPlayerId: playerId, networkStateVersion: snapshot.stateVersion,
+      isNetworkSubmitting: false, isNetworkSubmissionBlocked: false, ui: { ...current.ui, plannedActions: [], selectedCrewId: null,
+        selectedTargetId: null, selectedActionSlot: 'primary', executionConfirmed: false, lastError: null, lastErrorSupportCode: null,
+        lastPlayerDiff: null, ringAnimationPhase: 'none', ringAnimationFromBoard: null, ringAnimationProgress: 0 } });
+    return true;
+  },
 
-  updateGameState: (game) => set((state) => ({
+  leaveNetworkSession: () => {
+    networkBindingGeneration += 1;
+    NETWORK_GUARD_FAILURES.recordSuccess();
+    set({ networkSessionId: null, networkStateVersion: -1, currentPlayerId: null,
+      game: null, ui: initialUIState, networkTurnSubmitter: null, isNetworkSubmitting: false, isNetworkSubmissionBlocked: false });
+  },
+
+  setDifficulty: (difficulty) => {
+    if (rejectNetworkMutation(get(), set, 'change mission difficulty', 'difficulty')) return;
+    set({ difficulty });
+  },
+
+  setBotPlayerEnabled: (enabled) => {
+    if (rejectNetworkMutation(get(), set, 'change opponent control', 'bot-control')) return;
+    set({ botPlayerEnabled: enabled });
+  },
+
+  updateGameState: (game) => {
+    if (rejectNetworkMutation(get(), set, 'replace this mission', 'replace-game')) return;
+    set((state) => ({
     game,
     ui: {
       ...state.ui,
       lastPlayerDiff: null,
     },
-  })),
+    }));
+  },
 
   newGame: () => {
+    if (rejectNetworkMutation(get(), set, 'start a replacement mission', 'new-game')) return;
     const { difficulty } = get();
     const game = createMockGame(difficulty);
     const firstPlayerId = Array.from(game.players.keys())[0] ?? null;
@@ -574,6 +693,7 @@ export const useGameStore = create<GravityStore>((set, get) => ({
   },
 
   moveCrew: (crewId, toSection) => {
+    if (rejectNetworkMutation(get(), set, 'move this crew member', 'move-crew')) return false;
     const { game, currentPlayerId } = get();
 
     if (!game || !currentPlayerId) {
@@ -888,6 +1008,7 @@ Fix: route more power into the life support pool, use a life-support upgrade, or
     ui: {
       ...state.ui,
       lastError: message,
+      lastErrorSupportCode: null,
       executionConfirmed: message ? false : state.ui.executionConfirmed,
     },
   })),
@@ -1014,7 +1135,16 @@ Fix: route more power into the life support pool, use a life-support upgrade, or
 
   // === High-level game flow helpers ===
   playTurn: () => {
-    const { game, currentPlayerId, ui, networkTurnSubmitter } = get();
+    const { game, currentPlayerId, ui, networkTurnSubmitter, networkSessionId, networkStateVersion } = get();
+    const bindingGeneration = networkBindingGeneration;
+
+    if (networkSessionId && get().isNetworkSubmissionBlocked) return;
+
+    if (networkSessionId && !networkTurnSubmitter) {
+      rejectNetworkMutation(get(), set, 'lock your plan for this turn', 'submit-unavailable', true);
+      return;
+    }
+    if (get().isNetworkSubmitting) return;
 
     try {
       if (!game || !currentPlayerId) {
@@ -1033,18 +1163,37 @@ Fix: route more power into the life support pool, use a life-support upgrade, or
         );
       }
 
-      if (networkTurnSubmitter) {
+      if (networkSessionId && networkTurnSubmitter) {
         set({ isNetworkSubmitting: true, ui: { ...ui, lastError: null } });
         void networkTurnSubmitter([...ui.plannedActions])
+          .then(() => {
+            if (networkBindingGeneration === bindingGeneration && get().networkSessionId === networkSessionId && get().networkStateVersion === networkStateVersion) {
+              NETWORK_GUARD_FAILURES.recordSuccess();
+            }
+          })
           .catch((error: unknown) => {
+            if (networkBindingGeneration !== bindingGeneration || get().networkSessionId !== networkSessionId || get().networkStateVersion !== networkStateVersion) return;
+            const failure = error instanceof SessionRequestError
+              ? error
+              : createSessionRequestError(SESSION_REQUEST_CONTEXTS.submit, {
+                code: 'UNKNOWN_ERROR', status: 0, unconfirmed: true,
+                diagnostic: error instanceof Error ? error.message : String(error),
+              }, NETWORK_GUARD_FAILURES);
+            console.error('Gravity plan confirmation failed', { diagnostic: failure.diagnostic });
             set((state) => ({
+              isNetworkSubmissionBlocked: failure.occurrence >= 2,
               ui: {
                 ...state.ui,
-                lastError: error instanceof Error ? error.message : 'The server rejected this turn.',
+                lastError: failure.playerError.message,
+                lastErrorSupportCode: failure.playerError.supportCode,
               },
             }));
           })
-          .finally(() => set({ isNetworkSubmitting: false }));
+          .finally(() => {
+            if (networkBindingGeneration === bindingGeneration && get().networkSessionId === networkSessionId && get().networkStateVersion === networkStateVersion) {
+              set({ isNetworkSubmitting: false });
+            }
+          });
         return;
       }
 
@@ -1136,6 +1285,7 @@ Fix: route more power into the life support pool, use a life-support upgrade, or
   },
 
   assignExplorerRepairKit: (section: ShipSection) => {
+    if (rejectNetworkMutation(get(), set, 'place your captain’s repair kit', 'captain-repair-kit')) return;
     const { game, currentPlayerId } = get();
 
     if (!game || !currentPlayerId) {
@@ -1158,6 +1308,7 @@ Fix: route more power into the life support pool, use a life-support upgrade, or
   },
 
   chooseSpacePirateStartingUpgrade: (upgradeId: string) => {
+    if (rejectNetworkMutation(get(), set, 'choose your captain’s starting upgrade', 'captain-starting-upgrade')) return;
     const { game, currentPlayerId } = get();
 
     if (!game || !currentPlayerId) {

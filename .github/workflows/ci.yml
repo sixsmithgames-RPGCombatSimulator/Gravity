@@ -125,3 +125,53 @@ jobs:
         run: docker compose build server web
         env:
           VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+
+      - name: Retain multiplayer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multiplayer-evidence
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+
+  visual-quality:
+    # Use the same OS/font rasterizer as the reviewed baselines. The Linux job
+    # above separately certifies PostgreSQL/Redis behavior and container builds.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use repository npm version
+        run: npm install --global npm@10.8.2
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build rules used by the fixture API
+        run: npm run build --workspace=@gravity/core
+
+      - name: Install reviewed Chromium engine
+        run: npx playwright install chromium
+
+      - name: Test visual, keyboard and responsiveness contracts
+        run: npm run test:quality
+
+      - name: Retain visual and performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-quality-evidence
+          path: |
+            test-results/
+            playwright-quality-report/
+          retention-days: 14

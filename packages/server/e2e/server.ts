@@ -9,6 +9,7 @@ import { gravitySessionGameFactory } from '../src/sessions/gravitySessionGameFac
 import { MemorySessionRepository } from '../src/sessions/memorySessionRepository';
 import { SessionService } from '../src/sessions/sessionService';
 import { configureSessionSockets } from '../src/sessions/sessionSockets';
+import { VISUAL_GAME_FACTORY } from './visualGameFactory';
 
 if (process.env.GRAVITY_E2E !== '1') {
   throw new Error('The E2E server can run only when GRAVITY_E2E=1.');
@@ -30,7 +31,9 @@ const identityVerifier: IdentityVerifier = {
 const events = new SessionEventBus();
 const service = new SessionService({
   repository: new MemorySessionRepository(),
-  gameFactory: gravitySessionGameFactory,
+  // Fixed server-side opening seeds make visual baselines repeatable; never
+  // accept fixture state from a browser or enable this in production server.ts.
+  gameFactory: process.env.GRAVITY_VISUAL_FIXTURE === '1' ? VISUAL_GAME_FACTORY : gravitySessionGameFactory,
   events,
   joinCodePepper: 'gravity-e2e-loopback-only-pepper',
 });

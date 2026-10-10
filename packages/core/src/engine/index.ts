@@ -2228,6 +2228,12 @@ export function applyPlayerActions(
     ...game,
     lastActionResolutionRecordsByPlayerId: null,
   };
+  // Turn-local causal history is discarded after resolution, never persisted as another authority.
+  const resolutionContext: ActionResolutionContext = {
+    originalTargets: new Map(game.board.objects.map(object => [object.id, object])),
+    consumedTargets: new Map(),
+    destroyedHostiles: new Map(),
+  };
   for (const actionType of actionOrder) {
     const actionsOfType = actionsByType.get(actionType);
     if (!actionsOfType || actionsOfType.length === 0) {
@@ -2265,7 +2271,7 @@ export function applyPlayerActions(
     );
 
     // Resolve all actions of this type simultaneously
-    const nextGame = resolveActionsOfType(currentGame, actionType, sortedActionsOfType);
+    const nextGame = resolveActionsOfType(currentGame, actionType, sortedActionsOfType, resolutionContext);
 
     for (const { playerId, action } of sortedActionsOfType) {
       const player = currentGame.players.get(playerId);
@@ -2400,6 +2406,7 @@ function resolveActionsOfType(
   game: GameState,
   actionType: PlayerActionType,
   actions: Array<{ playerId: string; action: PlayerAction }>,
+  context: ActionResolutionContext,
 ): GameState {
   switch (actionType) {
     case 'revive':
@@ -2413,15 +2420,15 @@ function resolveActionsOfType(
     case 'maneuver':
       return resolveManeuverActions(game, actions);
     case 'scan':
-      return resolveScanActions(game, actions);
+      return resolveScanActions(game, actions, context);
     case 'acquire':
-      return resolveAcquireActions(game, actions);
+      return resolveAcquireActions(game, actions, context);
     case 'attack':
-      return resolveAttackActions(game, actions);
+      return resolveAttackActions(game, actions, context);
     case 'launch':
-      return resolveLaunchActions(game, actions);
+      return resolveLaunchActions(game, actions, context);
     case 'retaliate':
-      return resolveRetaliateActions(game, actions);
+      return resolveRetaliateActions(game, actions, context);
     case 'assemble':
       return resolveAssembleActions(game, actions);
     case 'integrate':
@@ -2440,6 +2447,27 @@ function resolveActionsOfType(
 // For now, they validate basic prerequisites and return the game unchanged.
 
 type ActionBatch = Array<{ playerId: string; action: PlayerAction }>;
+
+type ActionResolutionContext = {
+  originalTargets: Map<string, AnySpaceObject>;
+  consumedTargets: Map<string, 'scan' | 'acquire'>;
+  destroyedHostiles: Map<string, 'attack' | 'torpedo'>;
+};
+
+/**
+ * Purpose: Recover a known target only when successful canonical resolution consumed it this turn.
+ * Parameters: Turn-local identity/removal history and the requested target id.
+ * Returns: Its turn-entry object for validation, or undefined when no successful removal is recorded.
+ * Side effects: None. This is causal contention handling, never a missing-target fallback or swallowed error.
+ */
+function getConsumedResolutionTarget(context: ActionResolutionContext, objectId: string): AnySpaceObject | undefined {
+  if (!context.consumedTargets.has(objectId)) return undefined;
+  const target = context.originalTargets.get(objectId);
+  if (!target) {
+    throw new Error('Cannot resolve consumed target because its turn-entry identity is missing. Root cause: resolution history is inconsistent. Fix: Preserve original target identity before canonical removal.');
+  }
+  return target;
+}
 
 function spendPowerInSection(ship: Ship, section: ShipSection, amount: number): Ship {
   if (amount <= 0) {
@@ -6463,7 +6491,7 @@ export function previewManeuver(
  * Note: Scan results are stored but not collected until Acquire action.
  * For simplicity, we track scan results in action.parameters.scanResult.
  */
-function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
+function resolveScanActions(game: GameState, actions: ActionBatch, context: ActionResolutionContext): GameState {
   if (actions.length === 0) {
     return game;
   }
@@ -6521,7 +6549,9 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
       );
     }
 
-    const targetObject = updatedObjects.find(obj => obj.id === targetObjectId);
+    const currentTarget = updatedObjects.find(obj => obj.id === targetObjectId);
+    const consumedTarget = currentTarget ? undefined : getConsumedResolutionTarget(context, targetObjectId);
+    const targetObject = currentTarget ?? consumedTarget;
 
     if (!targetObject) {
       throw new Error(
@@ -6563,17 +6593,22 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
         ship: shipAfterCost,
       };
 
-      updatedObjects = updatedObjects.filter(obj => obj.id !== targetObjectId);
+      if (!consumedTarget) {
+        updatedObjects = updatedObjects.filter(obj => obj.id !== targetObjectId);
+        context.consumedTargets.set(targetObjectId, 'scan');
+      }
       players.set(playerId, workingPlayer);
       continue;
     }
 
-    const scanTargets = [targetObject];
+    const scanTargets = consumedTarget ? [] : [targetObject];
     const rawSecondaryTargetObjectId = (action.parameters as Record<string, unknown> | undefined)
       ?.secondaryTargetObjectId;
 
     if (stimResult.stimmed && typeof rawSecondaryTargetObjectId === 'string' && rawSecondaryTargetObjectId.length > 0) {
-      const secondaryObject = updatedObjects.find(obj => obj.id === rawSecondaryTargetObjectId);
+      const currentSecondaryObject = updatedObjects.find(obj => obj.id === rawSecondaryTargetObjectId);
+      const consumedSecondaryObject = currentSecondaryObject ? undefined : getConsumedResolutionTarget(context, rawSecondaryTargetObjectId);
+      const secondaryObject = currentSecondaryObject ?? consumedSecondaryObject;
       if (!secondaryObject) {
         throw new Error(
           'Cannot resolve scan action because secondary target object not found on board. ' +
@@ -6595,7 +6630,7 @@ function resolveScanActions(game: GameState, actions: ActionBatch): GameState {
         );
       }
 
-      scanTargets.push(secondaryObject);
+      if (!consumedSecondaryObject) scanTargets.push(secondaryObject);
     }
 
     const scanResolution = applyScanResultsForTargets({
@@ -6696,7 +6731,7 @@ function getScanRangeBonus(crew: AnyCrew | Captain): number {
  * - Wreck: 2+ = resource, 5+ = upgrade
  * - Station: auto resource, 4+ = upgrade
  */
-function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState {
+function resolveAcquireActions(game: GameState, actions: ActionBatch, context: ActionResolutionContext): GameState {
   if (actions.length === 0) {
     return game;
   }
@@ -6875,6 +6910,7 @@ function resolveAcquireActions(game: GameState, actions: ActionBatch): GameState
 
       updatedObjects = updatedObjects.filter((obj) => obj.id !== acquireTargetId);
       removedObjectIds.add(acquireTargetId);
+      context.consumedTargets.set(acquireTargetId, 'acquire');
 
       delete updatedScanDiscoveries[acquireTargetId];
     }
@@ -7014,7 +7050,7 @@ function resolveAcquireRewardFromStoredDiscovery(discovery: ScanDiscoveryRecord)
  * - Target in action.target.objectId (hostile) or action.target.playerId (PvP)
  * - rollValues are not provided in action.parameters (engine computes a fixed value)
  */
-function resolveAttackActions(game: GameState, actions: ActionBatch): GameState {
+function resolveAttackActions(game: GameState, actions: ActionBatch, context: ActionResolutionContext): GameState {
   if (actions.length === 0) {
     return game;
   }
@@ -7025,6 +7061,8 @@ function resolveAttackActions(game: GameState, actions: ActionBatch): GameState 
   }
 
   const updatedObjects = [...game.board.objects];
+  // Keep successful destruction through the later Retaliate stage, while never treating
+  // an object that was already debris at turn entry as an attackable target.
 
   for (const { playerId, action } of actions) {
     const player = updatedPlayers.get(playerId);
@@ -7120,8 +7158,9 @@ function resolveAttackActions(game: GameState, actions: ActionBatch): GameState 
 
     if (targetObjectId) {
       const objectIndex = updatedObjects.findIndex(obj => obj.id === targetObjectId);
+      const consumedTarget = objectIndex < 0 ? getConsumedResolutionTarget(context, targetObjectId) : undefined;
 
-      if (objectIndex === -1) {
+      if (objectIndex === -1 && !consumedTarget) {
         throw new Error(
           'Cannot resolve attack action because target object not found. ' +
           `Root cause: objectId "${targetObjectId}" not found on board. ` +
@@ -7129,10 +7168,13 @@ function resolveAttackActions(game: GameState, actions: ActionBatch): GameState 
         );
       }
 
-      const targetObject = updatedObjects[objectIndex];
+      const targetObject = consumedTarget ?? updatedObjects[objectIndex];
+      const consumedEarlierHostile = consumedTarget?.type === 'hostile_ship';
+      const destroyedByEarlierResolution = context.originalTargets.get(targetObjectId)?.type === 'hostile_ship' &&
+        context.destroyedHostiles.has(targetObjectId) && targetObject.type === 'debris';
 
       // Validate target is attackable (hostile)
-      if (targetObject.type !== 'hostile_ship') {
+      if (targetObject.type !== 'hostile_ship' && !destroyedByEarlierResolution) {
         throw new Error(
           'Cannot resolve attack action because target is not hostile. ' +
           `Root cause: object type is "${targetObject.type}" not "hostile_ship". ` +
@@ -7153,6 +7195,13 @@ function resolveAttackActions(game: GameState, actions: ActionBatch): GameState 
           `Root cause: distance to target is ${distance}, must be adjacent (1). ` +
           'Fix: Move closer to the hostile ship before attacking.'
         );
+      }
+
+      if (destroyedByEarlierResolution || consumedEarlierHostile) {
+        // Crew assignment and section power are still spent; do not damage/re-roll loot or
+        // consume a scan bonus for an enemy another simultaneous attack already destroyed.
+        updatedPlayers.set(playerId, workingPlayer);
+        continue;
       }
 
       const scannedTurn = workingPlayer.scannedHostiles?.[targetObjectId];
@@ -7188,6 +7237,7 @@ function resolveAttackActions(game: GameState, actions: ActionBatch): GameState 
       const newHull = Math.max(0, currentHull - totalDamage);
 
       if (newHull <= 0) {
+        context.destroyedHostiles.set(targetObjectId, 'attack');
         // Hostile destroyed - convert to debris
         // Create a new debris object at the same position
         const debris: AnySpaceObject = {
@@ -7280,7 +7330,7 @@ function getAttackDamageBonus(crew: AnyCrew | Captain): number {
  * - Target in action.target.objectId
  * - Launch type in action.parameters.launchType: 'torpedo' | 'probe'
  */
-function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState {
+function resolveLaunchActions(game: GameState, actions: ActionBatch, context: ActionResolutionContext): GameState {
   if (actions.length === 0) {
     return game;
   }
@@ -7420,8 +7470,9 @@ function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState 
         }
 
         const objectIndex = updatedObjects.findIndex(obj => obj.id === step.targetObjectId);
+        const consumedTarget = objectIndex < 0 ? getConsumedResolutionTarget(context, step.targetObjectId) : undefined;
 
-        if (objectIndex === -1) {
+        if (objectIndex === -1 && !consumedTarget) {
           throw new Error(
             'Cannot resolve launch action because target object not found. ' +
               `Root cause: objectId "${step.targetObjectId}" not found on board. ` +
@@ -7429,16 +7480,17 @@ function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState 
           );
         }
 
-        const targetObject = updatedObjects[objectIndex];
+        const targetObject = consumedTarget ?? updatedObjects[objectIndex];
 
         const torpedoDamage = 6;
 
-        if (targetObject.type === 'hostile_ship') {
+        if (!consumedTarget && targetObject.type === 'hostile_ship') {
           const hostile = targetObject as { hull?: number };
           const currentHull = hostile.hull ?? 12;
           const newHull = Math.max(0, currentHull - torpedoDamage);
 
           if (newHull <= 0) {
+            context.destroyedHostiles.set(step.targetObjectId, 'torpedo');
             const debris: AnySpaceObject = {
               id: targetObject.id,
               type: 'debris',
@@ -7479,7 +7531,9 @@ function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState 
           );
         }
 
-        const targetObject = updatedObjects.find(obj => obj.id === step.targetObjectId);
+        const currentTarget = updatedObjects.find(obj => obj.id === step.targetObjectId);
+        const consumedTarget = currentTarget ? undefined : getConsumedResolutionTarget(context, step.targetObjectId);
+        const targetObject = currentTarget ?? consumedTarget;
 
         if (!targetObject) {
           throw new Error(
@@ -7487,6 +7541,13 @@ function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState 
               `Root cause: target objectId is "${String(step.targetObjectId)}" but no matching object exists in game.board.objects. ` +
               'Fix: Select a valid object on the board before launching a probe.'
           );
+        }
+
+        if (consumedTarget) {
+          // A launched probe still spends ammunition and the already-paid action power,
+          // but a consumed object cannot grant discoveries, loot or a second scan effect.
+          workingPlayer = { ...workingPlayer, resources: { ...workingPlayer.resources, probe: probeCount - 1 } };
+          continue;
         }
 
         const lootResourceTypeRaw = (targetObject as any).lootResourceType;
@@ -7585,11 +7646,11 @@ function resolveLaunchActions(game: GameState, actions: ActionBatch): GameState 
  * - Can only retaliate once per attack received
  * - Uses same damage calculation as attack
  */
-function resolveRetaliateActions(game: GameState, actions: ActionBatch): GameState {
+function resolveRetaliateActions(game: GameState, actions: ActionBatch, context: ActionResolutionContext): GameState {
   // Retaliate is essentially the same as attack but triggered defensively
   // The main difference is it doesn't consume an action slot
   // For implementation purposes, we delegate to the attack logic
-  return resolveAttackActions(game, actions);
+  return resolveAttackActions(game, actions, context);
 }
 
 /**

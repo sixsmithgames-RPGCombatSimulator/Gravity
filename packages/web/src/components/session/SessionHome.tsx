@@ -6,6 +6,7 @@ type SessionHomeProps = {
   initialDisplayName: string;
   isWorking: boolean;
   error: SessionUiError | null;
+  creationError: SessionUiError | null;
   onCreate: (displayName: string, maxPlayers: number) => Promise<void>;
   onJoin: (displayName: string, joinCode: string) => Promise<void>;
 };
@@ -15,14 +16,14 @@ const fieldClass =
 const buttonClass =
   'w-full rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-3 font-display font-semibold tracking-wide text-white shadow-lg shadow-cyan-950/40 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50';
 
-export function SessionHome({ initialDisplayName, isWorking, error, onCreate, onJoin }: SessionHomeProps) {
+export function SessionHome({ initialDisplayName, isWorking, error, creationError, onCreate, onJoin }: SessionHomeProps) {
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [joinCode, setJoinCode] = useState('');
 
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
-    void onCreate(displayName, maxPlayers);
+    if (!creationError) void onCreate(displayName, maxPlayers);
   };
 
   const submitJoin = (event: FormEvent) => {
@@ -48,6 +49,7 @@ export function SessionHome({ initialDisplayName, isWorking, error, onCreate, on
           <form onSubmit={submitCreate} className="rounded-xl border border-white/10 bg-slate-950/45 p-5">
             <h2 className="font-display text-xl text-cyan-200">Create mission</h2>
             <p className="mt-2 text-sm text-slate-400">You become host and receive a private eight-character code.</p>
+            <SessionErrorNotice error={creationError} className="mt-4" />
             <label className="mt-5 block text-sm font-medium text-slate-200" htmlFor="create-display-name">
               Commander name
             </label>
@@ -73,8 +75,8 @@ export function SessionHome({ initialDisplayName, isWorking, error, onCreate, on
                 <option key={count} value={count}>{count}</option>
               ))}
             </select>
-            <button className={`${buttonClass} mt-6`} disabled={isWorking} type="submit">
-              {isWorking ? 'Creating…' : 'Create private session'}
+            <button className={`${buttonClass} mt-6`} disabled={isWorking || Boolean(creationError)} type="submit">
+              {creationError ? 'Creation paused — contact support' : isWorking ? 'Creating…' : 'Create private session'}
             </button>
           </form>
 

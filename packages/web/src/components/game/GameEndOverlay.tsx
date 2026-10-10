@@ -1,5 +1,7 @@
 import { useGameStore } from '../../store/gameStore';
 import { calculateVictoryPointBreakdown, compareVictoryPointBreakdowns } from '@gravity/core';
+import { memo } from 'react';
+import { shallow } from 'zustand/shallow';
 
 /**
  * GameEndOverlay component
@@ -14,8 +16,14 @@ import { calculateVictoryPointBreakdown, compareVictoryPointBreakdowns } from '@
  * - Player rankings with scores
  * - Option to start new game
  */
-export function GameEndOverlay() {
-  const { game, setGame, setCurrentPlayer } = useGameStore();
+/** Returning from shared results uses the session lifecycle instead of clearing only the local board. */
+export const GameEndOverlay = memo(function GameEndOverlay({ onReturnHome }: { onReturnHome: () => void }) {
+  const { game, setGame, setCurrentPlayer, networkSessionId } = useGameStore((state) => ({
+    game: state.game,
+    setGame: state.setGame,
+    setCurrentPlayer: state.setCurrentPlayer,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
 
   if (!game || (game.status !== 'completed' && game.status !== 'abandoned')) {
     return null;
@@ -43,7 +51,11 @@ export function GameEndOverlay() {
   const wreckedCount = players.filter((p) => p.status === 'wrecked').length;
 
   const handleNewGame = () => {
-    // Reset game state - this will trigger the useEffect in App.tsx to create a new mock game
+    if (networkSessionId !== null) {
+      onReturnHome();
+      return;
+    }
+    // Only unbound development fixtures may reset local state directly.
     setGame(null);
     setCurrentPlayer(null);
   };
@@ -172,10 +184,10 @@ export function GameEndOverlay() {
             onClick={handleNewGame}
             className="btn-primary flex-1 text-sm"
           >
-            New Game
+            {networkSessionId !== null ? 'Return to mission home' : 'New Game'}
           </button>
         </div>
       </div>
     </div>
   );
-}
+});

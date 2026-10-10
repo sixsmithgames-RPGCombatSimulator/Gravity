@@ -1,4 +1,5 @@
-import { useMemo, useEffect, useRef, useState } from 'react';
+import { memo, useMemo, useEffect, useRef, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import type { JSX } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import {
@@ -316,11 +317,11 @@ function calculateRotationDelta(
   return spaceDelta * degreesPerSpace;
 }
 
-export function GameBoard() {
+/** Board presentation consumes only its own selections and camera state, never the complete UI store. */
+export const GameBoard = memo(function GameBoard() {
   const {
     game,
     currentPlayerId,
-    ui,
     setBoardZoom,
     setBoardOffset,
     resetBoardView,
@@ -330,12 +331,58 @@ export function GameBoard() {
     selectTarget,
     setExecutionConfirmed,
     setLastError,
-  } = useGameStore();
+  } = useGameStore((state) => ({
+    game: state.game,
+    currentPlayerId: state.currentPlayerId,
+    setBoardZoom: state.setBoardZoom,
+    setBoardOffset: state.setBoardOffset,
+    resetBoardView: state.resetBoardView,
+    setRingAnimationProgress: state.setRingAnimationProgress,
+    stopRingAnimation: state.stopRingAnimation,
+    updatePlannedActionTarget: state.updatePlannedActionTarget,
+    selectTarget: state.selectTarget,
+    setExecutionConfirmed: state.setExecutionConfirmed,
+    setLastError: state.setLastError,
+  }), shallow);
+  const ui = useGameStore((state) => ({
+    boardZoom: state.ui.boardZoom,
+    boardOffset: state.ui.boardOffset,
+    ringAnimationPhase: state.ui.ringAnimationPhase,
+    ringAnimationFromBoard: state.ui.ringAnimationFromBoard,
+    ringAnimationProgress: state.ui.ringAnimationProgress,
+    plannedActions: state.ui.plannedActions,
+    selectedCrewId: state.ui.selectedCrewId,
+    selectedActionSlot: state.ui.selectedActionSlot,
+    selectedTargetId: state.ui.selectedTargetId,
+  }), shallow);
 
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null);
   const [pinnedObjectIds, setPinnedObjectIds] = useState<Set<string>>(() => new Set());
   const hoverTimeoutRef = useRef<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [motionEnabled, setMotionEnabled] = useState(() =>
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches && document.visibilityState === 'visible',
+  );
   const PAN_STEP = 40;
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotion = () => setMotionEnabled(!preference.matches && document.visibilityState === 'visible');
+    preference.addEventListener('change', updateMotion);
+    document.addEventListener('visibilitychange', updateMotion);
+    updateMotion();
+    return () => {
+      preference.removeEventListener('change', updateMotion);
+      document.removeEventListener('visibilitychange', updateMotion);
+    };
+  }, []);
+
+  useEffect(() => {
+    // CSS reduced-motion rules cannot stop SVG SMIL. Pause its timeline, including when the tab is hidden.
+    if (!svgRef.current) return;
+    if (motionEnabled) svgRef.current.unpauseAnimations();
+    else svgRef.current.pauseAnimations();
+  }, [motionEnabled, game !== null]);
 
   const currentPlayer = currentPlayerId ? game?.players.get(currentPlayerId) : null;
   const scanDiscoveriesByObjectId: Record<string, ScanDiscoveryRecord> | undefined =
@@ -347,13 +394,14 @@ export function GameBoard() {
 
   // Drive ring rotation animation with requestAnimationFrame
   useEffect(() => {
-    if (ui.ringAnimationPhase !== 'environment' || !ui.ringAnimationFromBoard) {
+    if (!motionEnabled || ui.ringAnimationPhase !== 'environment' || !ui.ringAnimationFromBoard) {
       // No animation in progress
       animationStartTimeRef.current = null;
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      if (!motionEnabled && ui.ringAnimationPhase === 'environment') stopRingAnimation();
       return;
     }
 
@@ -386,7 +434,7 @@ export function GameBoard() {
         animationFrameRef.current = null;
       }
     };
-  }, [ui.ringAnimationPhase, ui.ringAnimationFromBoard, setRingAnimationProgress, stopRingAnimation]);
+  }, [motionEnabled, ui.ringAnimationPhase, ui.ringAnimationFromBoard, setRingAnimationProgress, stopRingAnimation]);
 
   useEffect(() => {
     return () => {
@@ -986,7 +1034,6 @@ export function GameBoard() {
             const isHazardOverlaySource = obj.type === 'hazard' && hazardOverlaySourceIds.has(obj.id);
 
             const isPinned = pinnedObjectIds.has(obj.id);
-            const showLabel = isPinned || hoveredObjectId === obj.id;
 
             const isTargeted = targetedObjectIds.has(obj.id) || ui.selectedTargetId === obj.id;
 
@@ -1076,7 +1123,25 @@ export function GameBoard() {
             return (
               <g
                 key={obj.id}
-                className="cursor-pointer hover:opacity-80 transition-opacity"
+                className="group cursor-pointer hover:opacity-80 transition-opacity"
+                role="button"
+                tabIndex={0}
+                aria-label={`Inspect ${getObjectLabel(obj.type).toLowerCase().replace(/^./, (letter) => letter.toUpperCase())}, ring ${obj.position.ring}, space ${obj.position.space}`}
+                aria-pressed={isPinned}
+                onFocus={() => {
+                  clearHoverTimeout();
+                  setHoveredObjectId(obj.id);
+                }}
+                onBlur={() => {
+                  if (!isPinned) setHoveredObjectId((previous) => previous === obj.id ? null : previous);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    // Keyboard and pointer activation share the same target and inspection logic.
+                    event.currentTarget.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                  }
+                }}
                 opacity={shouldGateSelection && !isInRange && !isTargeted ? 0.35 : 1}
                 onMouseEnter={() => {
                   clearHoverTimeout();
@@ -1133,6 +1198,7 @@ export function GameBoard() {
                   setHoveredObjectId(obj.id);
                 }}
               >
+                <circle className="pointer-events-none opacity-0 group-focus-visible:opacity-100" cx={coords.x} cy={coords.y} r={23} fill="none" stroke="#e2e8f0" strokeWidth={2} strokeDasharray="4 3" />
                 <g
                   className={isTargeted ? 'drop-shadow-[0_0_12px_rgba(59,130,246,0.85)]' : ''}
                 >
@@ -1227,39 +1293,6 @@ export function GameBoard() {
                   </g>
                 )}
 
-                {showLabel && (
-                  <g pointerEvents="none">
-                    <rect
-                      x={coords.x + 14}
-                      y={coords.y - 24}
-                      width={140}
-                      height={34}
-                      rx={6}
-                      fill="#0b1220"
-                      stroke={objColor}
-                      strokeWidth={1}
-                      opacity={0.92}
-                    />
-                    <text
-                      x={coords.x + 22}
-                      y={coords.y - 10}
-                      fontSize={10}
-                      fill="#e2e8f0"
-                    >
-                      <tspan x={coords.x + 22} dy={0} fontWeight={700}>
-                        {labelTitle}
-                      </tspan>
-                      <tspan x={coords.x + 22} dy={12} fill="#94a3b8" fontWeight={500}>
-                        {labelSubtitle}
-                      </tspan>
-                      {isHazard && (
-                        <tspan x={coords.x + 22} dy={12} fill="#f5d0fe" fontWeight={600}>
-                          Radiation: -{HAZARD_CONFIG.damage} hull / -{HAZARD_CONFIG.lifeSupportReduction} LS ≤{HAZARD_CONFIG.range} spaces
-                        </tspan>
-                      )}
-                    </text>
-                  </g>
-                )}
               </g>
             );
           })}
@@ -1474,8 +1507,32 @@ export function GameBoard() {
     );
   }
 
+  // HTML inspection remains readable at mobile scale and cannot extend outside the clipped SVG viewBox.
+  const pinnedIds = [...pinnedObjectIds];
+  const inspectionId = hoveredObjectId ?? pinnedIds[pinnedIds.length - 1];
+  const inspectedObject = game.board.objects.find((object) => object.id === inspectionId);
+  const inspectedDiscovery = inspectedObject ? scanDiscoveriesByObjectId?.[inspectedObject.id] : undefined;
+
   return (
-    <div className="w-full h-full relative flex items-center justify-center overflow-hidden">
+    // This parent-sized, already clipped surface isolates scene layout/paint from modal focus invalidation without changing board sizing or artwork.
+    <div className="tactical-board-viewport pointer-events-auto w-full h-full relative flex items-center justify-center overflow-hidden" data-testid="game-board-viewport">
+      {inspectedObject && (
+        <section aria-label="Board object inspection" className="absolute bottom-3 left-3 z-20 w-64 max-w-[calc(100%-1.5rem)] rounded-lg border bg-slate-950/95 p-3 shadow-xl" style={{ borderColor: getObjectColor(inspectedObject.type) }}>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-xs font-semibold capitalize text-slate-100">{inspectedObject.type.replace(/_/g, ' ')}</h2>
+              <p className="mt-1 text-xs text-slate-400">Ring {inspectedObject.position.ring} · Space {inspectedObject.position.space}</p>
+            </div>
+            <button type="button" aria-label="Close object inspection" className="shrink-0 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800" onClick={() => {
+              clearHoverTimeout();
+              setHoveredObjectId(null);
+              setPinnedObjectIds(new Set());
+            }}>Close</button>
+          </div>
+          {inspectedObject.type === 'hazard' && <p className="mt-2 text-xs leading-5 text-fuchsia-200">Radiation within {HAZARD_CONFIG.range} spaces: −{HAZARD_CONFIG.damage} hull and −{HAZARD_CONFIG.lifeSupportReduction} life support.</p>}
+          {inspectedDiscovery && <p className="mt-2 text-xs leading-5 text-cyan-200">Scan: {inspectedDiscovery.foundResource ? inspectedDiscovery.resourceType?.replace(/_/g, ' ') : 'No resources'}{inspectedDiscovery.foundUpgrade ? ` · ${inspectedDiscovery.reservedUpgrade?.name ?? 'Upgrade reserved'}` : ' · No upgrade'}.</p>}
+        </section>
+      )}
       {/* Zoom controls overlay */}
       <div className="absolute top-3 right-3 z-20 flex flex-col gap-1">
         <button
@@ -1575,9 +1632,14 @@ export function GameBoard() {
           transformOrigin: 'center center',
         }}
       >
+        {/* Avoid a full-scene CSS filter: it repaints an offscreen board surface on every camera move. Object-level glow remains below. */}
         <svg
+          ref={svgRef}
+          data-testid="game-board"
+          role="group"
+          aria-label="Tactical mission board"
           viewBox={`${-VIEWBOX_PADDING} ${-VIEWBOX_PADDING} ${BOARD_SIZE + VIEWBOX_PADDING * 2} ${BOARD_SIZE + VIEWBOX_PADDING * 2}`}
-          className="w-full h-full drop-shadow-2xl"
+          className="w-full h-full"
           preserveAspectRatio="xMidYMid meet"
           onClick={(e) => {
             const targetEl = e.target as unknown as { dataset?: Record<string, string> };
@@ -1750,4 +1812,4 @@ export function GameBoard() {
       </div>
     </div>
   );
-}
+});

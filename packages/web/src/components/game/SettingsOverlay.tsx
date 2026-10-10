@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import { useGameStore } from '../../store/gameStore';
 import { SHIP_SECTIONS, type AnyCrew, type AnySpaceObject, type Captain, type GameState, type PlayerState, type Ship, type ShipSection } from '@gravity/core';
 import { AccessibleDialog } from './AccessibleDialog';
@@ -281,17 +282,22 @@ function applyScenarioToGame(game: GameState, scenario: Scenario): GameState {
   };
 }
 
-export function SettingsOverlay() {
-  const { game, ui, toggleSettings, setGame } = useGameStore();
+/** Scenario tools are confined to unbound development fixtures, including when a network connection drops. */
+export const SettingsOverlay = memo(function SettingsOverlay() {
+  const { game, settingsOpen, toggleSettings, setGame, networkSessionId } = useGameStore((state) => ({
+    game: state.game,
+    settingsOpen: state.ui.settingsOpen,
+    toggleSettings: state.toggleSettings,
+    setGame: state.setGame,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
   const [text, setText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  const canShow = useMemo(() => {
-    return Boolean(import.meta.env.DEV);
-  }, []);
+  const canShow = Boolean(import.meta.env.DEV) && networkSessionId === null;
 
   useEffect(() => {
-    if (!ui.settingsOpen || !game || !canShow) {
+    if (!settingsOpen || !game || !canShow) {
       return;
     }
 
@@ -305,9 +311,9 @@ export function SettingsOverlay() {
     const scenario = serializeScenarioFromGame(game);
     setText(JSON.stringify(scenario, null, 2));
     setError(null);
-  }, [ui.settingsOpen, game, canShow]);
+  }, [settingsOpen, game, canShow]);
 
-  if (!ui.settingsOpen || !game || !canShow) {
+  if (!settingsOpen || !game || !canShow) {
     return null;
   }
 
@@ -361,7 +367,7 @@ export function SettingsOverlay() {
 
   return (
     <AccessibleDialog
-      open={ui.settingsOpen}
+      open={settingsOpen}
       onClose={handleClose}
       eyebrow="Developer settings"
       title="Scenario editor"
@@ -401,4 +407,4 @@ export function SettingsOverlay() {
         </div>
     </AccessibleDialog>
   );
-}
+});

@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run --testTimeout 10000",
+    "test:typecheck": "tsc --project tsconfig.tests.json",
     "test:coverage": "vitest run --coverage --testTimeout 10000",
     "lint": "eslint src --ext ts",
     "clean": "rm -rf dist"
@@ -17,8 +18,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "typescript": "^5.3.0",
-    "vitest": "^4.1.10"
+    "vitest": "4.1.11"
   }
 }

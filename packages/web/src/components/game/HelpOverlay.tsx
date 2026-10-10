@@ -1,5 +1,7 @@
 import { useGameStore } from '../../store/gameStore';
 import { AccessibleDialog } from './AccessibleDialog';
+import { memo } from 'react';
+import { shallow } from 'zustand/shallow';
 
 const TURN_STEPS = [
   ['1', 'Event', 'Every fourth turn, new objects fall in and an Event card resolves.'],
@@ -8,16 +10,21 @@ const TURN_STEPS = [
   ['4', 'Environment', 'Rings and objects move, orbit stability is checked, then collisions and hazards resolve.'],
 ] as const;
 
-export function HelpOverlay() {
-  const { ui, toggleHelp } = useGameStore();
+/** Accurate mission help is isolated from unrelated board and draft changes. */
+export const HelpOverlay = memo(function HelpOverlay() {
+  const { helpOpen, toggleHelp, networkSessionId } = useGameStore((state) => ({
+    helpOpen: state.ui.helpOpen,
+    toggleHelp: state.toggleHelp,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
 
-  if (!ui.helpOpen) {
+  if (!helpOpen) {
     return null;
   }
 
   return (
     <AccessibleDialog
-      open={ui.helpOpen}
+      open={helpOpen}
       onClose={toggleHelp}
       eyebrow="Game help"
       title="Survive the well. Complete your mission. Escape."
@@ -56,7 +63,7 @@ export function HelpOverlay() {
             <li>Select a crew card in the ship dashboard, then choose an available action.</li>
             <li>Configure the action in the action bar; required targets and resources must be set before execution.</li>
             <li>Use the board controls to zoom or reset the view. Select objects to inspect their state.</li>
-            <li>Use Roster to review or change your Captain and two advanced crew during the current beta setup flow.</li>
+            <li>Use Roster to inspect your Captain, advanced crew, and their abilities. Mission crew changes are confirmed by the game.</li>
           </ul>
         </section>
 
@@ -79,13 +86,18 @@ export function HelpOverlay() {
               <dt className="font-semibold text-orange-300">Orange</dt><dd>Rings 3–4; 4 hull and 1 conduit damage.</dd>
               <dt className="font-semibold text-red-300">Red</dt><dd>Rings 1–2; 8 hull, 2 conduit, and 1 corridor damage.</dd>
             </dl>
+            <p className="mt-3 text-xs leading-5 text-gravity-muted">
+              Attacks, scans, probes, and torpedoes spend the assigned crew action and their usual power or ammunition even if another crew clears the shared target first. The later action adds no effect or reward.
+            </p>
           </section>
         </div>
 
         <p className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-xs leading-5 text-blue-100">
-          Beta note: this build currently runs a local game with one AI opponent. Network sessions and reconnect support are the next product slice.
+          {networkSessionId !== null
+            ? 'Your mission is shared with the other players. Lock your plan when ready; the turn resolves after every human player has locked theirs. Bots are controlled by the game. Refreshing restores your last completed turn.'
+            : 'This development fixture runs locally. Changes here do not create a shared multiplayer mission.'}
         </p>
       </div>
     </AccessibleDialog>
   );
-}
+});

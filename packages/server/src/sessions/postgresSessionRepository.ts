@@ -11,6 +11,8 @@ import {
   users,
 } from '../database/schema';
 import { SessionError } from './errors';
+import { nextSessionRevision } from './sessionRevision';
+import { assertLaunchSnapshotMatchesLobby } from './sessionValidation';
 import type { SessionParticipant, SessionRecord, SessionRepository, TurnSubmissionResult } from './types';
 
 type DbExecutor = Pick<Database, 'select' | 'insert' | 'update'>;
@@ -149,17 +151,22 @@ export class PostgresSessionRepository implements SessionRepository {
   }
 
   findById(sessionId: string): Promise<SessionRecord | null> {
-    return loadSession(this.database, eq(sessions.id, sessionId));
+    // All summary fields must describe one committed revision, even while another turn commits.
+    return this.database.transaction((transaction) => loadSession(transaction, eq(sessions.id, sessionId)), {
+      isolationLevel: 'repeatable read', accessMode: 'read only',
+    });
   }
 
   findByJoinCodeHash(joinCodeHash: string): Promise<SessionRecord | null> {
-    return loadSession(this.database, eq(sessions.join_code_hash, joinCodeHash));
+    return this.database.transaction((transaction) => loadSession(transaction, eq(sessions.join_code_hash, joinCodeHash)), {
+      isolationLevel: 'repeatable read', accessMode: 'read only',
+    });
   }
 
   async addParticipant(params: Parameters<SessionRepository['addParticipant']>[0]): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
       const [lockedSession] = await transaction
-        .select({ id: sessions.id, status: sessions.status, maxPlayers: sessions.max_players })
+        .select({ id: sessions.id, status: sessions.status, maxPlayers: sessions.max_players, updatedAt: sessions.updated_at })
         .from(sessions)
         .where(eq(sessions.id, params.sessionId))
         .for('update')
@@ -192,17 +199,18 @@ export class PostgresSessionRepository implements SessionRepository {
         let seatNumber = 1;
         while (occupiedSeats.has(seatNumber)) seatNumber += 1;
 
+        const revision = nextSessionRevision(lockedSession.updatedAt, params.now);
         await transaction.insert(session_participants).values({
           session_id: params.sessionId,
           user_id: userId,
           display_name: params.displayName,
           seat_number: seatNumber,
           joined_at: params.now,
-          updated_at: params.now,
+          updated_at: revision,
         });
         await transaction
           .update(sessions)
-          .set({ updated_at: params.now })
+          .set({ updated_at: revision })
           .where(eq(sessions.id, params.sessionId));
       }
 
@@ -216,6 +224,13 @@ export class PostgresSessionRepository implements SessionRepository {
     params: Parameters<SessionRepository['setParticipantReady']>[0],
   ): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
+      // Use the same parent-row lock order as bot changes and launch to close the readiness/start race.
+      const [lockedSession] = await transaction.select({ status: sessions.status, updatedAt: sessions.updated_at }).from(sessions)
+        .where(eq(sessions.id, params.sessionId)).for('update').limit(1);
+      if (!lockedSession) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+      if (lockedSession.status !== 'lobby') {
+        throw new SessionError('CONFLICT', 'Readiness can only change while the session is in the lobby.', 409);
+      }
       const [user] = await transaction
         .select({ id: users.id })
         .from(users)
@@ -223,9 +238,10 @@ export class PostgresSessionRepository implements SessionRepository {
         .limit(1);
       if (!user) throw new SessionError('NOT_A_MEMBER', 'You are not a member of this session.', 403);
 
+      const revision = nextSessionRevision(lockedSession.updatedAt, params.now);
       const updated = await transaction
         .update(session_participants)
-        .set({ is_ready: params.isReady, updated_at: params.now })
+        .set({ is_ready: params.isReady, updated_at: revision })
         .where(
           and(
             eq(session_participants.session_id, params.sessionId),
@@ -239,7 +255,7 @@ export class PostgresSessionRepository implements SessionRepository {
 
       await transaction
         .update(sessions)
-        .set({ updated_at: params.now })
+        .set({ updated_at: revision })
         .where(eq(sessions.id, params.sessionId));
       const session = await loadSession(transaction, eq(sessions.id, params.sessionId));
       if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
@@ -256,7 +272,7 @@ export class PostgresSessionRepository implements SessionRepository {
   async setBotSeat(params: Parameters<SessionRepository['setBotSeat']>[0]): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
       const [lockedSession] = await transaction
-        .select({ status: sessions.status, maxPlayers: sessions.max_players })
+        .select({ status: sessions.status, maxPlayers: sessions.max_players, updatedAt: sessions.updated_at })
         .from(sessions)
         .where(eq(sessions.id, params.sessionId))
         .for('update')
@@ -283,11 +299,12 @@ export class PostgresSessionRepository implements SessionRepository {
         )
         .limit(1);
 
+      const revision = nextSessionRevision(lockedSession.updatedAt, params.now);
       if (params.isBot) {
         if (existing?.isBot) {
           await transaction
             .update(session_participants)
-            .set({ display_name: params.displayName, is_ready: true, updated_at: params.now })
+            .set({ display_name: params.displayName, is_ready: true, updated_at: revision })
             .where(eq(session_participants.id, existing.id));
         } else {
           if (existing) {
@@ -301,7 +318,7 @@ export class PostgresSessionRepository implements SessionRepository {
             is_ready: true,
             is_bot: true,
             joined_at: params.now,
-            updated_at: params.now,
+            updated_at: revision,
           });
         }
       } else if (existing?.isBot) {
@@ -310,7 +327,7 @@ export class PostgresSessionRepository implements SessionRepository {
 
       await transaction
         .update(sessions)
-        .set({ updated_at: params.now })
+        .set({ updated_at: revision })
         .where(eq(sessions.id, params.sessionId));
       const session = await loadSession(transaction, eq(sessions.id, params.sessionId));
       if (!session) throw new SessionError('NOT_FOUND', 'Session not found after updating its bot roster.', 404);
@@ -326,9 +343,15 @@ export class PostgresSessionRepository implements SessionRepository {
    */
   async cancelLobby(params: Parameters<SessionRepository['cancelLobby']>[0]): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
+      const [lockedSession] = await transaction.select({ status: sessions.status, updatedAt: sessions.updated_at }).from(sessions)
+        .where(eq(sessions.id, params.sessionId)).for('update').limit(1);
+      if (!lockedSession || lockedSession.status !== 'lobby') {
+        throw new SessionError('CONFLICT', 'Only a waiting lobby can be canceled.', 409);
+      }
+      const revision = nextSessionRevision(lockedSession.updatedAt, params.now);
       const updated = await transaction
         .update(sessions)
-        .set({ status: 'abandoned', ended_at: params.now, updated_at: params.now })
+        .set({ status: 'abandoned', ended_at: params.now, updated_at: revision })
         .where(and(eq(sessions.id, params.sessionId), eq(sessions.status, 'lobby')))
         .returning({ id: sessions.id });
       if (updated.length === 0) {
@@ -342,13 +365,18 @@ export class PostgresSessionRepository implements SessionRepository {
 
   async commitStart(params: Parameters<SessionRepository['commitStart']>[0]): Promise<SessionRecord> {
     return this.database.transaction(async (transaction) => {
+      await transaction.select({ id: sessions.id }).from(sessions)
+        .where(eq(sessions.id, params.sessionId)).for('update').limit(1);
+      const current = await loadSession(transaction, eq(sessions.id, params.sessionId));
+      if (!current) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+      assertLaunchSnapshotMatchesLobby(current, params.snapshot, params.expectedUpdatedAt);
       const [updated] = await transaction
         .update(sessions)
         .set({
           status: 'active',
           state_version: params.snapshot.stateVersion,
           started_at: params.now,
-          updated_at: params.now,
+          updated_at: nextSessionRevision(current.updatedAt, params.now),
         })
         .where(
           and(
@@ -386,7 +414,7 @@ export class PostgresSessionRepository implements SessionRepository {
   ): Promise<TurnSubmissionResult> {
     return this.database.transaction(async (transaction) => {
       const [lockedSession] = await transaction
-        .select({ stateVersion: sessions.state_version })
+        .select({ stateVersion: sessions.state_version, updatedAt: sessions.updated_at })
         .from(sessions)
         .where(eq(sessions.id, params.sessionId))
         .for('update')
@@ -488,6 +516,14 @@ export class PostgresSessionRepository implements SessionRepository {
         );
       }
 
+      const [currentSnapshot] = await transaction
+        .select({ state: state_snapshots.state }).from(state_snapshots)
+        .where(and(eq(state_snapshots.session_id, params.sessionId), eq(state_snapshots.state_version, params.expectedStateVersion)))
+        .limit(1);
+      if (!currentSnapshot) throw new SessionError('NOT_FOUND', 'Authoritative state snapshot not found.', 404);
+      // Canonical validation happens under the session lock and before the first pending write.
+      params.validate(currentSnapshot.state, participant.playerId, params.actions);
+
       await transaction.insert(turn_submissions).values({
         session_id: params.sessionId,
         participant_id: params.participantId,
@@ -512,6 +548,9 @@ export class PostgresSessionRepository implements SessionRepository {
         );
       const submittedPlayerIds = submissionRows.map((row) => row.playerId);
       if (!params.requiredPlayerIds.every((playerId) => submittedPlayerIds.includes(playerId))) {
+        // Pending plans also change authoritative summary state and need an ordered revision.
+        await transaction.update(sessions).set({ updated_at: nextSessionRevision(lockedSession.updatedAt, params.now) })
+          .where(eq(sessions.id, params.sessionId));
         return {
           status: 'pending',
           stateVersion: lockedSession.stateVersion,
@@ -519,18 +558,6 @@ export class PostgresSessionRepository implements SessionRepository {
           snapshot: null,
         };
       }
-
-      const [currentSnapshot] = await transaction
-        .select({ state: state_snapshots.state })
-        .from(state_snapshots)
-        .where(
-          and(
-            eq(state_snapshots.session_id, params.sessionId),
-            eq(state_snapshots.state_version, params.expectedStateVersion),
-          ),
-        )
-        .limit(1);
-      if (!currentSnapshot) throw new SessionError('NOT_FOUND', 'Authoritative state snapshot not found.', 404);
 
       const nextSnapshot = params.process(
         currentSnapshot.state,
@@ -540,7 +567,7 @@ export class PostgresSessionRepository implements SessionRepository {
         .update(sessions)
         .set({
           state_version: nextSnapshot.stateVersion,
-          updated_at: params.now,
+          updated_at: nextSessionRevision(lockedSession.updatedAt, params.now),
           ...(nextSnapshot.game.status === 'completed'
             ? { status: 'ended' as const, ended_at: params.now }
             : {}),

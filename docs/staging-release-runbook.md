@@ -1,8 +1,8 @@
 # Gravity staging release runbook
 
-Updated: 2026-08-04
+Updated: 2026-10-10
 
-Status: Repository-side rehearsal passes; external project linkage and managed services remain operator actions
+Status: Vercel web and Railway API are linked and serving the beta. Current-candidate evidence and remaining certification gates are maintained in [the game quality plan](first-class-game-quality-plan.md).
 
 ## Purpose
 
@@ -12,13 +12,13 @@ Promote one immutable Gravity candidate through a production-like staging enviro
 
 | Surface | Staging target | Required property |
 | --- | --- | --- |
-| Web | Vercel static Vite deployment at `https://gravity-staging.sixsmithgames.com` | Preview deployment is tested before promotion; CSP permits only the selected API and Clerk origins |
+| Web | Vercel static Vite beta at `https://gravity.sixsmithgames.com` | Preview deployment is tested before promotion; CSP permits only the selected API and Clerk origins |
 | API + Socket.IO | One container replica at `https://gravity-api-staging.sixsmithgames.com` | Native Node HTTP/WebSocket support, health checks, graceful shutdown, immutable image digest |
 | PostgreSQL | Managed PostgreSQL in the same region as the API | Encrypted connection, automated backups, point-in-time recovery where available |
 | Redis | Managed Redis exposed through `rediss://` | TLS, authentication, persistence appropriate to the provider |
 | Identity | Clerk staging/development instance | Web origin allowlisted; issuer, publishable key, and `azp` authorized party agree |
 
-The beta API must remain at **one replica**. Durable game state is shared in PostgreSQL and rate limits are shared in Redis, but Socket.IO fan-out and the turn critical section are still process-local. Do not scale horizontally until the Socket.IO Redis adapter and a distributed session lock are implemented and load-tested.
+The beta API must remain at **one replica**. PostgreSQL owns durable game state and serializes turn commits under the session row lock; Redis owns shared rate limits. Socket.IO fan-out and room coordination remain process-local. Do not scale horizontally until distributed broadcasts, membership revocation, restart recovery and concurrent database-backed commits are certified together under load. A Redis adapter alone is not that certification.
 
 Vercel Services is not selected for the beta API. Services is currently beta and the local deployment guidance does not validate this existing Node/Express layout. Keep the static web deployment on Vercel and use a proven Node container target unless the backend is deliberately adapted and certified as a Vercel Service.
 
@@ -37,12 +37,12 @@ Never commit the values below. Store them in the deployment provider and CI secr
 - `NODE_ENV=production`
 - `HOST=0.0.0.0`
 - `PORT` supplied by the platform
-- `CORS_ORIGIN=https://gravity-staging.sixsmithgames.com`
+- `CORS_ORIGIN=https://gravity.sixsmithgames.com`
 - `DATABASE_URL`
 - `REDIS_URL` using `rediss://` for managed TLS Redis
 - `CLERK_ISSUER`
 - `CLERK_AUDIENCE` when the token template uses one
-- `CLERK_AUTHORIZED_PARTIES=https://gravity-staging.sixsmithgames.com`
+- `CLERK_AUTHORIZED_PARTIES=https://gravity.sixsmithgames.com`
 - `JOIN_CODE_PEPPER` from a secret manager, at least 32 random characters
 - `RATE_LIMIT_WINDOW_MS=900000`
 - `RATE_LIMIT_MAX_REQUESTS=100`
@@ -84,10 +84,9 @@ The committed journey creates two identities, creates/joins/readies/starts a pri
 
 ## External staging deployment
 
-1. Link the frontend deliberately; this repository is not currently linked:
+1. Confirm the existing Gravity Vercel project linkage and selected environment. Do not create a duplicate project:
 
    ```powershell
-   vercel link
    vercel pull --yes --environment=preview
    ```
 
@@ -105,7 +104,7 @@ The committed journey creates two identities, creates/joins/readies/starts a pri
 7. Run the remote boundary smoke:
 
    ```powershell
-   npm run staging:smoke -- --web https://gravity-staging.sixsmithgames.com --api https://gravity-api-staging.sixsmithgames.com
+   npm run staging:smoke -- --web https://gravity.sixsmithgames.com --api https://gravity-api-staging.sixsmithgames.com
    ```
 
 8. In two clean browser profiles with distinct real Clerk accounts, repeat create → join → ready → launch → submit → turn 2 → refresh/resume. Confirm there are no console errors and capture the session ID and deployment identifiers in the release record.
@@ -162,10 +161,10 @@ After restoration, run migrations, `/health/ready`, the PostgreSQL integration t
 - Track create→join conversion, reconnect rate, turn submission latency, stale/invalid rejection count, and session completion rate.
 - Retain server logs long enough to investigate a beta report without storing join codes or identity tokens.
 
-## Remaining external blockers
+## Remaining external certification gates
 
-- Create/link the Vercel project and staging domains.
-- Select and provision the single-replica Node container platform.
-- Provision managed PostgreSQL and managed TLS Redis.
-- Create two real Clerk staging test accounts and configure the allowed web origin.
+- Confirm the tested Git commit is serving on both the existing Vercel and Railway deployments.
+- Verify the Railway API remains at one replica and inspect managed PostgreSQL/Redis readiness.
+- Inventory current-version uncommitted plans with canonical validation before beta sign-off (Q-20 in the quality plan). The new preflight prevents new invalid locks; it does not repair invalid locks saved by older releases. Any affected rows require an accepted, audited targeted repair that preserves the completed snapshot, not a database reset.
+- Complete the real-Clerk two-account journey without resetting an existing player's mission.
 - Configure monitoring/alerts and exercise provider-native backup recovery.

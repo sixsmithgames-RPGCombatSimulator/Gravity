@@ -9,12 +9,15 @@ export type SessionRequestContext = {
   failedResult: string;
   safeState: string;
   nextAction: string;
+  /** Only use confirmed-rejection copy when the request result actually proves rejection. */
+  unconfirmed?: { failedResult: string; safeState: string; nextAction: string; supportRequired?: boolean };
 };
 
 type SessionFailureDetails = {
   code: string;
   status: number;
   diagnostic: string;
+  unconfirmed?: boolean;
 };
 
 type SessionErrorEnvelope = {
@@ -44,6 +47,7 @@ const PLAYER_REASON_BY_CODE: Record<string, string> = {
   INTERNAL_ERROR: 'The game service could not finish the request safely.',
   SERVICE_UNAVAILABLE: 'The game service is temporarily unavailable.',
   UNKNOWN_ERROR: 'The game service did not provide a usable reason.',
+  NETWORK_CONTROL_UNAVAILABLE: 'This shared mission uses only the crew and settings confirmed for your player seat.',
 };
 
 /**
@@ -86,6 +90,7 @@ export class SessionRequestError extends Error {
     public readonly stage: string,
     public readonly occurrence: number,
     public readonly diagnostic: string,
+    public readonly isUnconfirmed = false,
   ) {
     super(playerError.message);
     this.name = 'SessionRequestError';
@@ -128,6 +133,9 @@ export function createSessionRequestError(
   details: SessionFailureDetails,
   tracker: SessionFailureTracker,
 ): SessionRequestError {
+  // A lost reply is not evidence that a write was rejected. Preserve the original
+  // retry identity and describe uncertainty instead of promising nothing changed.
+  const recovery = details.unconfirmed && context.unconfirmed ? context.unconfirmed : context;
   const signature = `${context.workflow}:${context.stage}:${details.code}:${details.status}`;
   const occurrence = tracker.recordFailure(signature);
   const supportCode = createSupportCode(signature);
@@ -135,14 +143,15 @@ export function createSessionRequestError(
     ? {
         message:
           `Sorry—Gravity hit the same snag twice while trying to ${context.attemptedAction}. ` +
-          `${context.safeState} Please email ${GRAVITY_SUPPORT_EMAIL} and include the support code below so we can get your game moving again.`,
+          (details.unconfirmed && context.unconfirmed ? `${recovery.failedResult} ` : '') +
+          `${recovery.safeState} Please email ${GRAVITY_SUPPORT_EMAIL} and include the support code below so we can get your game moving again.`,
         supportCode,
       }
     : {
         message:
-          `Gravity was trying to ${context.attemptedAction}. ${context.failedResult} ` +
-          `${getPlayerReason(details.code)} ${context.safeState} ${context.nextAction}`,
-        supportCode: null,
+          `Gravity was trying to ${context.attemptedAction}. ${recovery.failedResult} ` +
+          `${getPlayerReason(details.code)} ${recovery.safeState} ${recovery.nextAction}`,
+        supportCode: details.unconfirmed && context.unconfirmed?.supportRequired ? supportCode : null,
       };
 
   return new SessionRequestError(
@@ -153,6 +162,7 @@ export function createSessionRequestError(
     context.stage,
     occurrence,
     details.diagnostic,
+    details.unconfirmed === true,
   );
 }
 
@@ -166,11 +176,14 @@ export async function parseSessionResponse<T>(
   response: Response,
   context: SessionRequestContext,
   tracker: SessionFailureTracker,
+  preserveFailureSequence = false,
+  validateResponse?: (value: unknown) => void,
 ): Promise<T> {
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   const rawBody = await response.text();
   let parsedBody: unknown = null;
   let parseFailed = false;
+  let validationDiagnostic: string | null = null;
 
   if (rawBody.trim()) {
     try {
@@ -181,8 +194,15 @@ export async function parseSessionResponse<T>(
   }
 
   if (response.ok && !parseFailed && parsedBody !== null) {
-    tracker.recordSuccess();
-    return parsedBody as T;
+    try {
+      validateResponse?.(parsedBody);
+      // A correction read is not a successful retry of the failed mutation; the
+      // next equivalent failure must still trigger its second-attempt boundary.
+      if (!preserveFailureSequence) tracker.recordSuccess();
+      return parsedBody as T;
+    } catch (cause) {
+      validationDiagnostic = cause instanceof Error ? cause.message : String(cause);
+    }
   }
 
   const envelope = !parseFailed && parsedBody && typeof parsedBody === 'object'
@@ -209,9 +229,11 @@ export async function parseSessionResponse<T>(
     {
       code,
       status: response.status,
+      unconfirmed: response.ok || response.status >= 500,
       diagnostic:
         `status=${response.status}; contentType=${contentType || 'missing'}; ` +
         `serverCode=${serverCode ?? 'missing'}; serverMessage=${serverMessage ?? 'missing'}; ` +
+        `validation=${validationDiagnostic ?? 'not rejected'}; ` +
         `responseExcerpt=${responseExcerpt || 'empty'}`,
     },
     tracker,
@@ -231,18 +253,29 @@ export function createClientSessionError(
   tracker: SessionFailureTracker,
 ): SessionRequestError {
   const diagnostic = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
-  return createSessionRequestError(context, { code, status: 0, diagnostic }, tracker);
+  return createSessionRequestError(context, { code, status: 0, diagnostic, unconfirmed: code === 'NETWORK_UNAVAILABLE' }, tracker);
 }
 
 /**
  * Purpose: Project a caught request error into the UI shape without exposing diagnostics.
- * Parameters: Unknown caught value and compliant fallback copy for non-session failures.
+ * Parameters: Unknown caught value, concrete action context and its shared consecutive-failure tracker.
  * Returns: A player-safe UI error.
- * Side effects: None.
+ * Side effects: Records and logs an unexpected failure; structured errors were already recorded by the API.
  */
-export function toSessionUiError(cause: unknown, fallbackMessage: string): SessionUiError {
+export function toSessionUiError(
+  cause: unknown,
+  context: SessionRequestContext,
+  tracker: SessionFailureTracker,
+): SessionUiError {
   if (cause instanceof SessionRequestError) return cause.playerError;
-  return { message: fallbackMessage, supportCode: null };
+  const failure = createSessionRequestError(context, {
+    code: 'UNKNOWN_ERROR', status: 0, unconfirmed: true,
+    diagnostic: cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
+  }, tracker);
+  console.error('Gravity session action returned an unexpected failure', {
+    workflow: failure.workflow, stage: failure.stage, occurrence: failure.occurrence, diagnostic: failure.diagnostic,
+  });
+  return failure.playerError;
 }
 
 /**

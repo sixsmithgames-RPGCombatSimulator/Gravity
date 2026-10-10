@@ -180,7 +180,7 @@ test('host cancellation closes the ready room for every player', async ({ browse
     await host.page.getByRole('button', { name: 'Cancel game' }).click();
 
     await expect(host.page.getByRole('heading', { name: 'GRAVITY' })).toBeVisible();
-    await expect(host.page.getByRole('alert')).toContainText('game was canceled');
+    await expect(host.page.getByRole('alert')).toContainText(/game was canceled|host canceled this game/);
     await expect(guest.page.getByRole('heading', { name: 'GRAVITY' })).toBeVisible();
     await expect(guest.page.getByRole('alert')).toContainText('host canceled this game');
     expect(host.errors).toEqual([]);

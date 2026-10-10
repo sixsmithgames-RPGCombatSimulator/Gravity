@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keep typography on the application origin: the former remote stylesheet
+   blocked startup when Google Fonts stalled. Variable faces cover every used
+   weight with two licensed Latin files; swap keeps mission controls readable
+   while the browser loads them. License notices ship at /font-licenses.txt. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('@fontsource-variable/orbitron/files/orbitron-latin-wght-normal.woff2') format('woff2');
+}
+
 /**
  * Global styles for Gravity game
  * Purpose: Base styling and custom utility classes
@@ -42,13 +62,35 @@
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* Near-zero durations still create animation lifecycles on focus/hover,
+       adding native modal style work. No game flow relies on end events: stop
+       CSS motion entirely. SVG SMIL is separately paused by the board. */
+    animation: none !important;
+    transition: none !important;
   }
 }
 
 @layer components {
+  /* The board has explicit parent dimensions and already clips its overlays.
+     Isolate its SVG work from sibling modal focus changes without size
+     containment, which would change the responsive layout's intrinsic sizing. */
+  .tactical-board-viewport {
+    contain: layout paint style;
+  }
+
+  /* Native modal owns the top-layer boundary; its inner dim layer preserves the
+     existing presentation without a second default browser backdrop tint. */
+  .mission-modal::backdrop {
+    background: transparent;
+  }
+
+  /* Ship panels already sit on an opaque command surface. Blurring that surface
+     for every section added full-scene raster work when modal focus changed. */
+  .ship-command-surface .panel {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   /* Panel component - glassmorphism elevated surface */
   .panel {
     @apply bg-gravity-surface/80 border border-gravity-border rounded-lg;

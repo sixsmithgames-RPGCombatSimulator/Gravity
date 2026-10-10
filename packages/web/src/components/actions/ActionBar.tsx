@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import { useGameStore } from '../../store/gameStore';
 import { SHIP_SECTIONS, TURN_CONFIG } from '@gravity/core';
 import type { PlayerActionType, AnyCrew, Captain, PlayerAction, ShipSection, TurnPhase } from '@gravity/core';
@@ -261,11 +262,11 @@ function CrewActionSlot({
   );
 }
 
-export function ActionBar() {
+/** Board view state is excluded from command planning subscriptions to keep camera movement cheap. */
+export const ActionBar = memo(function ActionBar() {
   const {
     game,
     currentPlayerId,
-    ui,
     addPlannedAction,
     removePlannedAction,
     playTurn,
@@ -273,7 +274,26 @@ export function ActionBar() {
     selectActionSlot,
     setExecutionConfirmed,
     isNetworkSubmitting,
-  } = useGameStore();
+    isNetworkSubmissionBlocked,
+  } = useGameStore((state) => ({
+    game: state.game,
+    currentPlayerId: state.currentPlayerId,
+    addPlannedAction: state.addPlannedAction,
+    removePlannedAction: state.removePlannedAction,
+    playTurn: state.playTurn,
+    selectCrew: state.selectCrew,
+    selectActionSlot: state.selectActionSlot,
+    setExecutionConfirmed: state.setExecutionConfirmed,
+    isNetworkSubmitting: state.isNetworkSubmitting,
+    isNetworkSubmissionBlocked: state.isNetworkSubmissionBlocked,
+  }), shallow);
+  const ui = useGameStore((state) => ({
+    plannedActions: state.ui.plannedActions,
+    selectedCrewId: state.ui.selectedCrewId,
+    selectedActionSlot: state.ui.selectedActionSlot,
+    lastError: state.ui.lastError,
+    lastErrorSupportCode: state.ui.lastErrorSupportCode,
+  }), shallow);
 
   const player = currentPlayerId ? game?.players.get(currentPlayerId) : null;
 
@@ -414,6 +434,7 @@ export function ActionBar() {
   const shouldShowBonusActionControls = canPlanBonusAction || !!plannedBonusAction;
 
   const [bonusCrewId, setBonusCrewId] = useState<string>(plannedBonusCrewId ?? '');
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   useEffect(() => {
     if (plannedBonusCrewId) {
@@ -535,7 +556,19 @@ export function ActionBar() {
   };
 
   return (
-    <div className="px-3 py-2.5" style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
+    <div style={{ background: 'linear-gradient(180deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8))' }}>
+      {/* A compact mobile disclosure keeps the pinned header from consuming the ship's usable viewport. */}
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 border-t border-blue-400/20 px-4 py-3 text-left text-xs font-semibold text-blue-100 sm:hidden"
+        aria-expanded={mobileActionsOpen}
+        aria-controls="mission-action-controls"
+        onClick={() => setMobileActionsOpen((open) => !open)}
+      >
+        <span>{shouldShowActionSlots ? 'Plan actions' : phaseGuidance.label}{isPlanning ? ` · ${assignedActionCount}/${assignableCrew.length} ready` : ''}</span>
+        <span aria-hidden="true">{mobileActionsOpen ? '▴' : '▾'}</span>
+      </button>
+      <div id="mission-action-controls" className={`${mobileActionsOpen ? 'block' : 'hidden'} max-h-[60dvh] overflow-y-auto px-3 py-2.5 sm:block sm:max-h-none sm:overflow-visible`}>
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
         {/* Current phase briefing */}
         <div className="min-w-0 lg:w-[230px] lg:shrink-0">
@@ -645,6 +678,7 @@ export function ActionBar() {
               disabled={
                 game.status !== 'in_progress' ||
                 isNetworkSubmitting ||
+                isNetworkSubmissionBlocked ||
                 (isPlanning && !allActionsAssigned) ||
                 (isExecution && !allExecutionChoicesComplete)
               }
@@ -655,7 +689,7 @@ export function ActionBar() {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                {isNetworkSubmitting ? 'Submitting…' : phaseGuidance.buttonLabel}
+                {isNetworkSubmissionBlocked ? 'Plan paused — contact support' : isNetworkSubmitting ? 'Submitting…' : phaseGuidance.buttonLabel}
               </span>
             </button>
           </div>
@@ -667,10 +701,12 @@ export function ActionBar() {
           {ui.lastError && (
             <div className="text-[10px] text-red-200 bg-red-950/30 px-2 py-1 rounded border border-red-500/30 max-w-[260px] text-right">
               {ui.lastError}
+              {ui.lastErrorSupportCode && <p className="mt-1 select-text text-[10px] text-slate-400">Support code: {ui.lastErrorSupportCode}</p>}
             </div>
           )}
         </div>
       </div>
+      </div>
     </div>
   );
-}
+});

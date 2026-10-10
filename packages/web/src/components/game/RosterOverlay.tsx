@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import { useGameStore } from '../../store/gameStore';
 import {
   buildCaptainPoolForSettings,
@@ -40,8 +41,16 @@ function getRandomAdvancedCrewName(existing: Set<string>) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export function RosterOverlay() {
-  const { game, ui, currentPlayerId, toggleRoster, setGame } = useGameStore();
+/** Shared missions inspect committed crew; only unbound fixtures expose the setup editor. */
+export const RosterOverlay = memo(function RosterOverlay() {
+  const { game, rosterOpen, currentPlayerId, toggleRoster, setGame, networkSessionId } = useGameStore((state) => ({
+    game: state.game,
+    rosterOpen: state.ui.rosterOpen,
+    currentPlayerId: state.currentPlayerId,
+    toggleRoster: state.toggleRoster,
+    setGame: state.setGame,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
   const [selectedCaptainType, setSelectedCaptainType] = useState<CaptainType | ''>('');
   const [selectedOfficerRoles, setSelectedOfficerRoles] = useState<Record<string, OfficerType>>({});
   const [officerNames, setOfficerNames] = useState<Record<string, string>>({});
@@ -116,7 +125,7 @@ export function RosterOverlay() {
   }, [officerCards]);
 
   useEffect(() => {
-    if (!ui.rosterOpen || !player) {
+    if (!rosterOpen || !player) {
       return;
     }
 
@@ -134,10 +143,47 @@ export function RosterOverlay() {
     setSelectedOfficerRoles(nextOfficerRoles);
     setOfficerNames(nextOfficerNames);
     setError(null);
-  }, [ui.rosterOpen, player]);
+  }, [rosterOpen, player]);
 
-  if (!ui.rosterOpen || !game) {
+  if (!rosterOpen || !game) {
     return null;
+  }
+
+  if (networkSessionId !== null && player) {
+    const captainCard = captainCardByType.get(player.captain.captainType);
+    const committedCrew = [player.captain, ...player.crew];
+    return (
+      <AccessibleDialog
+        open={rosterOpen}
+        onClose={toggleRoster}
+        eyebrow="Roster"
+        title="Your mission crew"
+        description="Inspect your crew and abilities from the last completed turn."
+      >
+        <p className="mb-4 rounded-md border border-blue-400/25 bg-blue-500/10 px-3 py-2 text-sm leading-6 text-blue-100">
+          This is your confirmed mission roster. Crew abilities, condition, and location are shared with the other players.
+        </p>
+        <div className="space-y-3">
+          {committedCrew.map((member) => {
+            const card = 'captainType' in member
+              ? captainCard
+              : member.type === 'officer' ? officerCardByRole.get(member.role) : undefined;
+            const rulesText = (card?.effects as { rulesText?: unknown } | undefined)?.rulesText;
+            const role = 'captainType' in member ? 'Captain' : member.role.replace(/_/g, ' ');
+            return (
+              <section key={member.id} className="rounded-lg border border-gravity-border bg-slate-950/35 p-3">
+                <h3 className="text-sm font-semibold text-slate-100">{member.name}</h3>
+                <p className="mt-1 text-xs capitalize text-blue-200">{role} · {member.status} · {member.location?.replace(/_/g, ' ') ?? 'No section assigned'}</p>
+                {card && <p className="mt-2 text-sm leading-6 text-gravity-muted">{card.description}</p>}
+                {typeof rulesText === 'string' && rulesText.trim().length > 0 && (
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-200">{rulesText}</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      </AccessibleDialog>
+    );
   }
 
   const handleClose = () => {
@@ -145,6 +191,8 @@ export function RosterOverlay() {
   };
 
   const handleApply = () => {
+    // The explicit binding is independent of connection/submission callback availability.
+    if (networkSessionId !== null) return;
     if (!currentPlayerId) {
       setError('Cannot apply roster changes because no current player is selected.');
       return;
@@ -239,7 +287,7 @@ export function RosterOverlay() {
 
   return (
     <AccessibleDialog
-      open={ui.rosterOpen}
+      open={rosterOpen}
       onClose={handleClose}
       eyebrow="Roster"
       title="Build your command crew"
@@ -376,4 +424,4 @@ export function RosterOverlay() {
         </div>
     </AccessibleDialog>
   );
-}
+});

@@ -12,6 +12,7 @@ import {
 
 import type { AuthenticatedIdentity } from '../auth/identity';
 import { SessionError } from './errors';
+import { validateSessionPlan } from './sessionValidation';
 import type {
   CreatedSessionAccess,
   SessionAccess,
@@ -373,6 +374,7 @@ export class SessionService {
       expectedStateVersion: params.expectedStateVersion,
       actions: params.actions,
       requiredPlayerIds,
+      validate: validateSessionPlan,
       now: this.now(),
       process: (snapshot, actionsByPlayer) => {
         try {

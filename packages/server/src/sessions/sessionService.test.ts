@@ -1,6 +1,8 @@
 import { deserializeGameStateSnapshot } from '@gravity/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createContentionFactory, createContentionPlan } from '../../testFixtures/sessionContention';
+
 import type { AuthenticatedIdentity } from '../auth/identity';
 import { SessionError } from './errors';
 import { gravitySessionGameFactory } from './gravitySessionGameFactory';
@@ -249,5 +251,53 @@ describe('SessionService beta lobby lifecycle', () => {
         ],
       }),
     ).rejects.toMatchObject({ code: 'INVALID_ACTION' });
+  });
+
+  it('rejects an invalid early plan without locking it and accepts a corrected plan with the same submission id', async () => {
+    const { service, publish } = createService();
+    const created = await service.createSession({ identity: host, maxPlayers: 2 });
+    await service.joinSession({ identity: guest, joinCode: created.joinCode });
+    await service.setReady({ identity: host, sessionId: created.session.id, isReady: true });
+    await service.setReady({ identity: guest, sessionId: created.session.id, isReady: true });
+    const started = await service.startSession(host, created.session.id);
+    const before = structuredClone(started.session.latestSnapshot);
+    const submission = {
+      identity: host, sessionId: created.session.id,
+      submissionId: '40000000-0000-4000-8000-000000000001', expectedStateVersion: 1,
+    };
+    publish.mockClear();
+    await expect(service.submitTurn({ ...submission, actions: [{
+      playerId: created.participant.playerId, crewId: 'missing-crew', type: 'restore',
+    }] })).rejects.toMatchObject({ code: 'INVALID_ACTION' });
+    const rejected = await service.getSession(host, created.session.id);
+    expect(rejected.session.pendingPlayerIds).toEqual([]);
+    expect(rejected.session.latestSnapshot).toEqual(before);
+    expect(publish).not.toHaveBeenCalled();
+    expect(await service.submitTurn({ ...submission, actions: [] })).toMatchObject({ status: 'pending' });
+    expect(await service.submitTurn({
+      identity: guest, sessionId: created.session.id,
+      submissionId: '40000000-0000-4000-8000-000000000002', expectedStateVersion: 1, actions: [],
+    })).toMatchObject({ status: 'committed', stateVersion: 2 });
+  });
+
+  it.each(['attack', 'scan', 'probe', 'torpedo', 'retaliate', 'torpedo-retaliate', 'acquire-attack', 'acquire-retaliate'] as const)('commits two locked %s contention plans after the third human submits', async (mode) => {
+    const third = { subject: 'third-attacker', displayName: 'Third' };
+    const service = new SessionService({ repository: new MemorySessionRepository(),
+      gameFactory: createContentionFactory(mode), events: { publish() {} }, joinCodePepper: 'test-only-pepper-value', createJoinCode: () => 'ATCK2345' });
+    const created = await service.createSession({ identity: host, maxPlayers: 3 });
+    for (const identity of [guest, third]) await service.joinSession({ identity, joinCode: created.joinCode });
+    for (const identity of [host, guest, third]) await service.setReady({ identity, sessionId: created.session.id, isReady: true });
+    const started = await service.startSession(host, created.session.id);
+    for (const identity of [host, guest]) {
+      const participant = started.session.participants.find(member => member.userId === identity.subject);
+      if (!participant) throw new Error('Attack fixture participant was not found.');
+      expect(await service.submitTurn({ identity, sessionId: created.session.id, expectedStateVersion: 1, submissionId: identity.subject,
+        actions: createContentionPlan(participant.playerId, mode, identity === host) })).toMatchObject({ status: 'pending' });
+    }
+    expect((await service.getSession(host, created.session.id)).session.pendingPlayerIds).toHaveLength(2);
+    const committed = await service.submitTurn({ identity: third, sessionId: created.session.id, expectedStateVersion: 1, submissionId: third.subject, actions: [] });
+    expect(committed).toMatchObject({ status: 'committed', stateVersion: 2 });
+    expect(committed.snapshot?.game.board.objects.filter(object => object.id === 'shared-target')).toEqual(['attack', 'retaliate', 'torpedo-retaliate'].includes(mode) ? [expect.objectContaining({ type: 'debris' })] : []);
+    expect((await service.getSession(host, created.session.id)).session.pendingPlayerIds).toEqual([]);
   });
 });

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { SessionError } from './errors';
+import { nextSessionRevision } from './sessionRevision';
+import { assertLaunchSnapshotMatchesLobby } from './sessionValidation';
 import type { SessionRecord, SessionRepository, TurnSubmissionResult } from './types';
 
 function cloneSession(session: SessionRecord): SessionRecord {
@@ -85,6 +87,7 @@ export class MemorySessionRepository implements SessionRepository {
     let seatNumber = 1;
     while (occupiedSeats.has(seatNumber)) seatNumber += 1;
 
+    const revision = nextSessionRevision(session.updatedAt, params.now);
     session.participants.push({
       id: randomUUID(),
       sessionId: session.id,
@@ -96,10 +99,10 @@ export class MemorySessionRepository implements SessionRepository {
       isBot: false,
       isHost: false,
       joinedAt: params.now,
-      updatedAt: params.now,
+      updatedAt: revision,
     });
     session.participants.sort((left, right) => left.seatNumber - right.seatNumber);
-    session.updatedAt = params.now;
+    session.updatedAt = revision;
     return cloneSession(session);
   }
 
@@ -108,11 +111,15 @@ export class MemorySessionRepository implements SessionRepository {
   ): Promise<SessionRecord> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
+    if (session.status !== 'lobby') {
+      throw new SessionError('CONFLICT', 'Readiness can only change while the session is in the lobby.', 409);
+    }
     const participant = session.participants.find((candidate) => candidate.userId === params.userId);
     if (!participant) throw new SessionError('NOT_A_MEMBER', 'You are not a member of this session.', 403);
+    const revision = nextSessionRevision(session.updatedAt, params.now);
     participant.isReady = params.isReady;
-    participant.updatedAt = params.now;
-    session.updatedAt = params.now;
+    participant.updatedAt = revision;
+    session.updatedAt = revision;
     return cloneSession(session);
   }
 
@@ -140,6 +147,7 @@ export class MemorySessionRepository implements SessionRepository {
       throw new SessionError('CONFLICT', 'The host seat cannot be replaced by a bot.', 409);
     }
 
+    const revision = nextSessionRevision(session.updatedAt, params.now);
     if (params.isBot) {
       const botParticipant: SessionRecord['participants'][number] = {
         id: existing?.isBot ? existing.id : randomUUID(),
@@ -152,7 +160,7 @@ export class MemorySessionRepository implements SessionRepository {
         isBot: true,
         isHost: false,
         joinedAt: existing?.isBot ? existing.joinedAt : params.now,
-        updatedAt: params.now,
+        updatedAt: revision,
       };
       if (existingIndex >= 0) session.participants[existingIndex] = botParticipant;
       else session.participants.push(botParticipant);
@@ -161,7 +169,7 @@ export class MemorySessionRepository implements SessionRepository {
     }
 
     session.participants.sort((left, right) => left.seatNumber - right.seatNumber);
-    session.updatedAt = params.now;
+    session.updatedAt = revision;
     return cloneSession(session);
   }
 
@@ -177,25 +185,22 @@ export class MemorySessionRepository implements SessionRepository {
     if (session.status !== 'lobby') {
       throw new SessionError('CONFLICT', 'Only a waiting lobby can be canceled.', 409);
     }
+    const revision = nextSessionRevision(session.updatedAt, params.now);
     session.status = 'abandoned';
-    session.updatedAt = params.now;
+    session.updatedAt = revision;
     return cloneSession(session);
   }
 
   async commitStart(params: Parameters<SessionRepository['commitStart']>[0]): Promise<SessionRecord> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new SessionError('NOT_FOUND', 'Session not found.', 404);
-    if (session.status !== 'lobby' || session.latestSnapshot) {
-      throw new SessionError('CONFLICT', 'This session has already started.', 409);
-    }
-    if (session.updatedAt.getTime() !== params.expectedUpdatedAt.getTime()) {
-      throw new SessionError('CONFLICT', 'The lobby roster changed while the game was starting. Review it and launch again.', 409);
-    }
+    assertLaunchSnapshotMatchesLobby(session, params.snapshot, params.expectedUpdatedAt);
+    const revision = nextSessionRevision(session.updatedAt, params.now);
     session.status = 'active';
     session.stateVersion = params.snapshot.stateVersion;
     session.latestSnapshot = structuredClone(params.snapshot);
     session.startedAt = params.now;
-    session.updatedAt = params.now;
+    session.updatedAt = revision;
     return cloneSession(session);
   }
 
@@ -246,20 +251,26 @@ export class MemorySessionRepository implements SessionRepository {
       );
     }
 
-    submissions.push({
+    params.validate(session.latestSnapshot, participant.playerId, params.actions);
+    const revision = nextSessionRevision(session.updatedAt, params.now);
+    // Stage the write until validation/resolution succeeds, mirroring PostgreSQL transaction rollback.
+    const stagedSubmission = {
       participantId: params.participantId,
       playerId: participant.playerId,
       submissionId: params.submissionId,
       expectedStateVersion: params.expectedStateVersion,
       actions: structuredClone(params.actions),
-      resultStateVersion: null,
-    });
-    const currentSubmissions = submissions.filter(
+      resultStateVersion: null as number | null,
+    };
+    const stagedSubmissions = [...submissions, stagedSubmission];
+    const currentSubmissions = stagedSubmissions.filter(
       (submission) => submission.expectedStateVersion === params.expectedStateVersion,
     );
     const submittedPlayerIds = currentSubmissions.map((submission) => submission.playerId);
     if (!params.requiredPlayerIds.every((playerId) => submittedPlayerIds.includes(playerId))) {
+      submissions.push(stagedSubmission);
       session.pendingPlayerIds = submittedPlayerIds;
+      session.updatedAt = revision;
       return {
         status: 'pending',
         stateVersion: session.stateVersion,
@@ -271,12 +282,13 @@ export class MemorySessionRepository implements SessionRepository {
     const actions = Object.fromEntries(
       currentSubmissions.map((submission) => [submission.playerId, submission.actions]),
     );
-    const snapshot = params.process(structuredClone(session.latestSnapshot), actions);
+    const snapshot = params.process(structuredClone(session.latestSnapshot), structuredClone(actions));
+    submissions.push(stagedSubmission);
     session.latestSnapshot = structuredClone(snapshot);
     session.stateVersion = snapshot.stateVersion;
     session.pendingPlayerIds = [];
     if (snapshot.game.status === 'completed') session.status = 'ended';
-    session.updatedAt = params.now;
+    session.updatedAt = revision;
     for (const submission of currentSubmissions) submission.resultStateVersion = snapshot.stateVersion;
     return {
       status: 'committed',

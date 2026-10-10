@@ -35,7 +35,8 @@ import type {
   PlayerResources,
   ResourceType,
 } from '@gravity/core';
-import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { memo, useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { shallow } from 'zustand/shallow';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   buildCommittedManeuverParameters,
@@ -2253,6 +2254,7 @@ function SectionGridWithOverlay({
   updatePlannedActionTarget,
   moveCrew,
   explorerRepairKit,
+  allowCrewMovement,
 }: {
   ship: Ship;
   routingContext: {
@@ -2297,10 +2299,12 @@ function SectionGridWithOverlay({
   ) => void;
   moveCrew: (crewId: string, section: ShipSection) => boolean;
   explorerRepairKit?: { section: ShipSection | null; used: boolean } | null;
+  allowCrewMovement: boolean;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionRefCallbacks = useRef<Record<string, (element: HTMLDivElement | null) => void>>({});
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const measureRafRef = useRef<number | null>(null);
   const [sectionRects, setSectionRects] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
@@ -2342,18 +2346,27 @@ function SectionGridWithOverlay({
   };
 
   const registerSectionRef = useCallback(
-    (sectionKey: string) => (el: HTMLDivElement | null) => {
-      const previous = sectionRefs.current[sectionKey];
-      if (previous && resizeObserverRef.current) {
-        resizeObserverRef.current.unobserve(previous);
-      }
+    (sectionKey: string) => {
+      const existingCallback = sectionRefCallbacks.current[sectionKey];
+      if (existingCallback) return existingCallback;
+      // Cache each ref: a new callback on every render detached/reattached the card,
+      // scheduling a measurement -> render -> reattachment loop even while idle.
+      const callback = (el: HTMLDivElement | null) => {
+        const previous = sectionRefs.current[sectionKey];
+        if (previous === el) return;
+        if (previous && resizeObserverRef.current) {
+          resizeObserverRef.current.unobserve(previous);
+        }
 
-      sectionRefs.current[sectionKey] = el;
+        sectionRefs.current[sectionKey] = el;
 
-      if (el && resizeObserverRef.current) {
-        resizeObserverRef.current.observe(el);
-        scheduleMeasure();
-      }
+        if (el && resizeObserverRef.current) {
+          resizeObserverRef.current.observe(el);
+          scheduleMeasure();
+        }
+      };
+      sectionRefCallbacks.current[sectionKey] = callback;
+      return callback;
     },
     [scheduleMeasure],
   );
@@ -2591,10 +2604,9 @@ function SectionGridWithOverlay({
     }
 
     const updateDimensions = () => {
-      setGridDimensions({
-        width: el.offsetWidth,
-        height: el.offsetHeight,
-      });
+      const width = el.offsetWidth;
+      const height = el.offsetHeight;
+      setGridDimensions((previous) => previous.width === width && previous.height === height ? previous : { width, height });
 
       scheduleMeasure();
     };
@@ -2671,6 +2683,7 @@ function SectionGridWithOverlay({
             !!routingContext;
 
           const isMoveMode =
+            allowCrewMovement &&
             interactionMode === 'move' &&
             isExecutionPhase &&
             ui.selectedCrewId !== null;
@@ -2981,7 +2994,7 @@ function SectionGridWithOverlay({
               return;
             }
 
-            if (!canMoveToSection) {
+            if (!allowCrewMovement || !canMoveToSection) {
               return;
             }
 
@@ -3210,11 +3223,11 @@ function ShieldTracker({ ship, board }: { ship: Ship; board: Board }) {
   );
 }
 
-export function ShipDashboard() {
+/** Camera and decorative animation state are intentionally excluded from ship subscriptions. */
+export const ShipDashboard = memo(function ShipDashboard() {
   const {
     game,
     currentPlayerId,
-    ui,
     addPlannedAction,
     removePlannedAction,
     clearPlannedActions,
@@ -3229,7 +3242,34 @@ export function ShipDashboard() {
     toggleRoster,
     assignExplorerRepairKit,
     chooseSpacePirateStartingUpgrade,
-  } = useGameStore();
+    networkSessionId,
+  } = useGameStore((state) => ({
+    game: state.game,
+    currentPlayerId: state.currentPlayerId,
+    addPlannedAction: state.addPlannedAction,
+    removePlannedAction: state.removePlannedAction,
+    clearPlannedActions: state.clearPlannedActions,
+    selectCrew: state.selectCrew,
+    selectTarget: state.selectTarget,
+    selectActionSlot: state.selectActionSlot,
+    updatePlannedActionParameters: state.updatePlannedActionParameters,
+    updatePlannedActionTarget: state.updatePlannedActionTarget,
+    moveCrew: state.moveCrew,
+    setExecutionConfirmed: state.setExecutionConfirmed,
+    setLastError: state.setLastError,
+    toggleRoster: state.toggleRoster,
+    assignExplorerRepairKit: state.assignExplorerRepairKit,
+    chooseSpacePirateStartingUpgrade: state.chooseSpacePirateStartingUpgrade,
+    networkSessionId: state.networkSessionId,
+  }), shallow);
+  const ui = useGameStore((state) => ({
+    plannedActions: state.ui.plannedActions,
+    selectedCrewId: state.ui.selectedCrewId,
+    selectedTargetId: state.ui.selectedTargetId,
+    selectedActionSlot: state.ui.selectedActionSlot,
+    lastPlayerDiff: state.ui.lastPlayerDiff,
+    lastError: state.ui.lastError,
+  }), shallow);
 
   const [interactionMode, setInteractionMode] = useState<'none' | 'move' | 'route_power' | 'repair'>(
     'none',
@@ -3272,6 +3312,7 @@ export function ShipDashboard() {
     game.status === 'in_progress' && game.turnPhase === 'action_execution';
 
   const explorerNeedsRepairKitPlacement =
+    networkSessionId === null &&
     game.status === 'in_progress' &&
     captain.captainType === 'explorer' &&
     !!player.explorerRepairKit &&
@@ -3285,6 +3326,7 @@ export function ShipDashboard() {
   });
 
   const spacePirateNeedsStartingUpgradeChoice =
+    networkSessionId === null &&
     game.status === 'in_progress' &&
     captain.captainType === 'space_pirate' &&
     Array.isArray(player.spacePirateStartingUpgradeOptions) &&
@@ -4347,7 +4389,8 @@ export function ShipDashboard() {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 h-full">
+    // The modal backdrop blocks scene input; explicit pointer inheritance and the semantic command surface avoid scene-wide blur invalidation.
+    <div className="ship-command-surface pointer-events-auto flex min-w-0 flex-col gap-2 h-full" data-testid="ship-dashboard">
       <Dialog.Root open={clearConfirm !== null} onOpenChange={(open: boolean) => {
         if (!open) {
           setClearConfirm(null);
@@ -4560,9 +4603,9 @@ export function ShipDashboard() {
             type="button"
             className="px-2 py-0.5 rounded border border-gravity-border text-[10px] hover:bg-gravity-border transition-colors"
             onClick={toggleRoster}
-            title="Edit captain and officers"
+            title={networkSessionId !== null ? 'Inspect your mission crew' : 'Edit captain and officers'}
           >
-            Edit
+            {networkSessionId !== null ? 'Inspect' : 'Edit'}
           </button>
         </div>
         {reviveNeedsTarget && (
@@ -7643,6 +7686,7 @@ export function ShipDashboard() {
         updatePlannedActionParameters={updatePlannedActionParameters}
         updatePlannedActionTarget={updatePlannedActionTarget}
         moveCrew={moveCrew}
+        allowCrewMovement={networkSessionId === null}
         explorerRepairKit={player.explorerRepairKit ?? null}
       />
 
@@ -7951,5 +7995,5 @@ export function ShipDashboard() {
       </div>
     </div>
   );
-}
+});
 

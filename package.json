@@ -12,9 +12,10 @@
     "start": "npm run dev -w @gravity/web",
     "dev:all": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run build -w @gravity/core && npm run test --workspaces --if-present",
+    "test": "npm run build -w @gravity/core && tsc --project tsconfig.e2e.json && npm run test:typecheck --workspaces --if-present && npm run test --workspaces --if-present",
     "test:e2e": "playwright test",
     "test:e2e:staging": "playwright test --config playwright.staging.config.ts",
+    "test:quality": "playwright test --config playwright.quality.config.ts",
     "test:e2e:install": "playwright install chromium",
     "staging:smoke": "node ops/staging/smoke.mjs",
     "lint": "npm run lint --workspaces --if-present",
@@ -32,7 +33,7 @@
     "drizzle-orm": "1.0.0-rc.4",
     "eslint": "^8.57.0",
     "typescript": "^5.3.0",
-    "vitest": "^4.1.10"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=20.19.0",

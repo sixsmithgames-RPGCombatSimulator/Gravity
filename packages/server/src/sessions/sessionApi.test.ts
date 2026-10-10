@@ -186,4 +186,28 @@ describe('session HTTP API', () => {
     expect(rejected.status).toBe(403);
     expect(rejected.body.error.code).toBe('NOT_A_MEMBER');
   });
+
+  it('rejects an invalid first HTTP plan without a durable lock and permits correction', async () => {
+    const app = createSessionApp();
+    const created = await request(app).post('/sessions').set(bearer('host-token')).send({ maxPlayers: 2 });
+    const sessionId = created.body.session.id as string;
+    await request(app).post('/sessions/join').set(bearer('guest-token')).send({ joinCode: created.body.joinCode });
+    for (const token of ['host-token', 'guest-token']) await request(app).post(`/sessions/${sessionId}/ready`).set(bearer(token)).send({ isReady: true });
+    await request(app).post(`/sessions/${sessionId}/start`).set(bearer('host-token')).send();
+    const payload = { submissionId: '50000000-0000-4000-8000-000000000001', expectedStateVersion: 1 };
+    const invalid = await request(app).post(`/sessions/${sessionId}/turns`).set(bearer('host-token')).send({ ...payload,
+      actions: [{ playerId: created.body.participant.playerId, crewId: 'missing-crew', type: 'restore' }],
+    });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe('INVALID_ACTION');
+    const resumed = await request(app).get(`/sessions/${sessionId}`).set(bearer('host-token'));
+    expect(resumed.body.session.pendingPlayerIds).toEqual([]);
+    expect(resumed.body.session.stateVersion).toBe(1);
+    const corrected = await request(app).post(`/sessions/${sessionId}/turns`).set(bearer('host-token')).send({ ...payload, actions: [] });
+    expect(corrected.status).toBe(202);
+    const committed = await request(app).post(`/sessions/${sessionId}/turns`).set(bearer('guest-token')).send({
+      submissionId: '50000000-0000-4000-8000-000000000002', expectedStateVersion: 1, actions: [],
+    });
+    expect(committed.body).toMatchObject({ status: 'committed', stateVersion: 2 });
+  });
 });

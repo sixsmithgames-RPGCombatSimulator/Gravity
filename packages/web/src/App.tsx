@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import { deserializeGameStateSnapshot } from '@gravity/core';
+import { useEffect, useLayoutEffect } from 'react';
 import { useGameStore } from './store/gameStore';
 import { GameBoard } from './components/board/GameBoard';
 import { EventOverlay } from './components/events/EventOverlay';
@@ -25,27 +24,40 @@ import type { IdentityAccess } from './session/auth';
  * - Footer: Action bar for turn planning
  */
 function App({ identity }: { identity: IdentityAccess }) {
-  const { game, setGame, setCurrentPlayer, clearPlannedActions, setNetworkTurnSubmitter } = useGameStore();
+  // Board view changes never cause App to rebuild the dashboard/header tree.
+  const game = useGameStore((state) => state.game);
+  const restoreError = useGameStore((state) => state.game ? null : state.ui.lastError);
+  const restoreSupportCode = useGameStore((state) => state.game ? null : state.ui.lastErrorSupportCode);
+  const bindNetworkSession = useGameStore((state) => state.bindNetworkSession);
+  const hydrateNetworkSnapshot = useGameStore((state) => state.hydrateNetworkSnapshot);
+  const leaveNetworkSession = useGameStore((state) => state.leaveNetworkSession);
+  const setNetworkTurnSubmitter = useGameStore((state) => state.setNetworkTurnSubmitter);
+  const setNetworkSubmissionBlocked = useGameStore((state) => state.setNetworkSubmissionBlocked);
   const session = useSessionController(identity.getToken);
-  const appliedStateVersion = useRef(-1);
 
-  useEffect(() => {
-    const snapshot = session.access?.session.latestSnapshot;
-    if (!snapshot || snapshot.stateVersion <= appliedStateVersion.current) return;
+  // A support-stopped submission must be visibly disabled, not an enabled no-op.
+  useLayoutEffect(() => {
+    setNetworkSubmissionBlocked(session.isTurnSubmissionBlocked);
+  }, [session.isTurnSubmissionBlocked, setNetworkSubmissionBlocked]);
 
-    const hydrated = deserializeGameStateSnapshot(snapshot).game;
-    appliedStateVersion.current = snapshot.stateVersion;
-    setGame(hydrated);
-    clearPlannedActions();
-    if (session.access) {
-      setCurrentPlayer(session.access.participant.playerId);
+  // Bind and hydrate before paint: an active network screen must never briefly
+  // expose local controls or retain another mission's higher-version snapshot.
+  useLayoutEffect(() => {
+    const access = session.access;
+    if (!access) {
+      if (!session.isLoading) leaveNetworkSession();
+      return;
     }
-  }, [clearPlannedActions, game?.id, session.access, setCurrentPlayer, setGame]);
+    bindNetworkSession(access.session.id, access.participant.playerId);
+    if (access.session.latestSnapshot) {
+      hydrateNetworkSnapshot(access.session.id, access.participant.playerId, access.session.latestSnapshot);
+    }
+  }, [bindNetworkSession, hydrateNetworkSnapshot, leaveNetworkSession, session.access, session.isLoading]);
 
   useEffect(() => {
-    setNetworkTurnSubmitter(session.submitTurn);
+    setNetworkTurnSubmitter(session.access ? session.submitTurn : null);
     return () => setNetworkTurnSubmitter(null);
-  }, [session.submitTurn, setNetworkTurnSubmitter]);
+  }, [session.access?.session.id, session.submitTurn, setNetworkTurnSubmitter]);
 
   if (session.isLoading) {
     return (
@@ -63,7 +75,8 @@ function App({ identity }: { identity: IdentityAccess }) {
       <SessionHome
         initialDisplayName={identity.displayName}
         isWorking={session.isWorking}
-        error={session.error}
+        error={session.error === session.creationError ? null : session.error}
+        creationError={session.creationError}
         onCreate={session.createSession}
         onJoin={session.joinSession}
       />
@@ -76,21 +89,24 @@ function App({ identity }: { identity: IdentityAccess }) {
         access={session.access}
         joinCode={session.joinCode}
         isWorking={session.isWorking}
+        isRefreshRequired={session.isLobbyRefreshRequired}
         error={session.error}
         onSetReady={session.setReady}
         onSetBotSeat={session.setBotSeat}
         onCancel={session.cancelSession}
         onStart={session.startSession}
+        onRefresh={session.refreshSession}
       />
     );
   }
 
-  if (!game) {
+  if (!game || game.id !== session.access.session.id) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="font-display text-4xl mb-4">GRAVITY</h1>
-          <p className="text-gravity-muted">Synchronizing authoritative game state…</p>
+          <p className="text-gravity-muted">Restoring your latest completed turn…</p>
+          <SessionErrorNotice error={restoreError ? { message: restoreError, supportCode: restoreSupportCode } : null} className="mx-4 mt-4 max-w-xl" />
         </div>
       </div>
     );
@@ -123,20 +139,20 @@ function App({ identity }: { identity: IdentityAccess }) {
       <SessionErrorNotice error={session.error} className="relative z-20 mx-4 mt-3" />
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+      <main className="min-w-0 min-h-0 flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden">
         {/* Game board - takes most of the space */}
-        <div className="relative min-h-[56dvh] lg:min-h-0 lg:flex-1 overflow-hidden">
+        <div className="relative min-w-0 min-h-[56dvh] shrink-0 xl:min-h-0 xl:flex-1 overflow-hidden">
           <GameBoard />
           <EventOverlay />
           <RosterOverlay />
           <HelpOverlay />
           <SettingsOverlay />
-          <GameEndOverlay />
+          <GameEndOverlay onReturnHome={session.returnToMissionHome} />
         </div>
 
         {/* Ship dashboard - larger width for better visibility */}
         <aside
-          className="w-full lg:w-[clamp(620px,48vw,880px)] lg:min-w-[620px] border-t lg:border-t-0 lg:border-l border-gravity-border/30 overflow-visible lg:overflow-y-auto bg-slate-950/80 backdrop-blur-sm"
+          className="pointer-events-auto min-w-0 w-full xl:w-[clamp(620px,48vw,880px)] xl:min-w-[620px] xl:min-h-0 shrink-0 border-t xl:border-t-0 xl:border-l border-gravity-border/30 overflow-visible xl:overflow-y-auto bg-slate-950/95"
         >
           <div className="min-h-full px-3 py-4 sm:px-4 flex flex-col">
             <ShipDashboard />

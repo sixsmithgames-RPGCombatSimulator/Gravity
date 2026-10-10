@@ -77,15 +77,22 @@ export function configureSessionSockets(options: {
             return;
           }
         }
-        const access = await options.service.getSession(socket.data.identity, sessionId);
+        await options.service.getSession(socket.data.identity, sessionId);
         await socket.join(roomName(sessionId));
         socket.data.sessionId = sessionId;
+        // Re-read after joining: a seat may have been revoked while the first lookup was in flight.
+        const access = await options.service.getSession(socket.data.identity, sessionId);
+        if (socket.data.sessionId !== sessionId || !socket.rooms.has(roomName(sessionId))) {
+          throw new SessionError('NOT_A_MEMBER', 'Your player seat is no longer a member of this session.', 403);
+        }
         socket.emit('session_updated', access.session);
         if (access.session.latestSnapshot) {
           socket.emit('state_snapshot', access.session.latestSnapshot);
         }
         ack?.({ ok: true });
       } catch (error) {
+        await socket.leave(roomName(sessionId));
+        if (socket.data.sessionId === sessionId) socket.data.sessionId = null;
         if (!(error instanceof SessionError)) {
           ack?.({
             ok: false,
@@ -103,13 +110,30 @@ export function configureSessionSockets(options: {
 
   return options.events.subscribe((event) => {
     const room = roomName(event.session.id);
+    const allowedSubjects = new Set(event.session.participants.map((member) => member.userId).filter((subject) => subject !== null));
+    const authorizedSocketIds: string[] = [];
+    for (const socketId of options.io.sockets.adapter.rooms.get(room) ?? []) {
+      const socket = options.io.sockets.sockets.get(socketId);
+      if (!socket) continue;
+      if (allowedSubjects.has(socket.data.identity.subject)) {
+        authorizedSocketIds.push(socketId);
+        continue;
+      }
+      // Preserve the existing seat-replacement recovery notice, but never send its private snapshot.
+      socket.emit('session_updated', { ...event.session, latestSnapshot: null, pendingPlayerIds: [] });
+      socket.data.sessionId = null;
+      void socket.leave(room);
+    }
+    // Address the authorized connections explicitly: even an asynchronous adapter leave cannot leak a snapshot.
+    if (authorizedSocketIds.length === 0) return;
+    const recipients = options.io.to(authorizedSocketIds);
     if (event.type === 'game_started') {
-      options.io.to(room).emit('game_started', event.snapshot);
-      options.io.to(room).emit('state_snapshot', event.snapshot);
+      recipients.emit('game_started', event.snapshot);
+      recipients.emit('state_snapshot', event.snapshot);
     }
     if (event.type === 'state_snapshot') {
-      options.io.to(room).emit('state_snapshot', event.snapshot);
+      recipients.emit('state_snapshot', event.snapshot);
     }
-    options.io.to(room).emit('session_updated', event.session);
+    recipients.emit('session_updated', event.session);
   });
 }
